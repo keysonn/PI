@@ -3,7 +3,7 @@ package com.trafficsimulation.simulation;
 import com.trafficsimulation.gui.SimulationPanel;
 import com.trafficsimulation.model.Car;
 import com.trafficsimulation.model.Road;
-import com.trafficsimulation.model.RoadType; // Убедитесь, что этот импорт есть
+import com.trafficsimulation.model.RoadType; // <--- КРИТИЧЕСКИ ВАЖНЫЙ ИМПОРТ
 import com.trafficsimulation.model.TrafficLight;
 import com.trafficsimulation.model.TrafficLightState;
 
@@ -16,7 +16,7 @@ import java.util.List;
 public class SimulationEngine implements Runnable {
 
     private SimulationParameters parameters;
-    private Road road; // Этот объект будет пересоздаваться в initializeSimulation
+    private Road road;
     private TrafficFlowGenerator flowGenerator;
     private SimulationPanel simulationPanel;
 
@@ -29,34 +29,28 @@ public class SimulationEngine implements Runnable {
     public SimulationEngine(SimulationParameters params, SimulationPanel panel) {
         this.parameters = params;
         this.simulationPanel = panel;
-        initializeSimulation(); // Первый вызов для создания начального состояния
+        initializeSimulation();
         System.out.println("SimulationEngine создан.");
     }
 
-    /** Инициализация или сброс симуляции с текущими параметрами */
     public void initializeSimulation() {
         System.out.println("Инициализация симуляции с параметрами: " + parameters);
-        // 1. Создаем НОВЫЙ объект дороги. Его списки светофоров и знаков будут изначально пустыми.
         this.road = new Road(
                 parameters.getRoadLengthKm(),
                 parameters.getRoadType(),
                 parameters.getLanesPerDirection(),
                 parameters.getNumberOfDirections()
         );
-
-        // 2. Создаем новый генератор потока для НОВОЙ дороги
         this.flowGenerator = new TrafficFlowGenerator(parameters, this.road);
-        this.simulationTime = 0.0; // Сбрасываем время симуляции
+        this.simulationTime = 0.0;
 
-        // 3. Добавляем светофоры и знаки на НОВУЮ, чистую дорогу
-        // Пример добавления светофора:
-        if (road.getLength() > 100 && parameters.getRoadType() != RoadType.HIGHWAY) {
+        // Добавляем светофоры на НОВУЮ, чистую дорогу
+        if (road.getLength() > 100 && parameters.getRoadType() != RoadType.HIGHWAY) { // Используем импортированный RoadType
             road.addTrafficLight(new TrafficLight(road.getLength() * 0.3, 30, 30, TrafficLightState.RED));
-            if (road.getLength() > 500 && road.getTrafficLights().size() < 2) { // Проверяем лимит перед добавлением второго
+            if (road.getLength() > 500 && road.getTrafficLights().size() < 2) {
                 road.addTrafficLight(new TrafficLight(road.getLength() * 0.7, 25, 35, TrafficLightState.GREEN));
             }
         }
-        // TODO: Добавить логику для добавления дорожных знаков на основе параметров или пользовательского ввода
     }
 
     public void startSimulation() {
@@ -103,7 +97,7 @@ public class SimulationEngine implements Runnable {
                         pauseLock.wait();
                         System.out.println("Поток симуляции проснулся.");
                         if (!running) break;
-                        lastUpdateTime = System.nanoTime(); // Сброс времени после паузы
+                        lastUpdateTime = System.nanoTime();
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         running = false;
@@ -119,27 +113,23 @@ public class SimulationEngine implements Runnable {
             double deltaTime = elapsedTimeNano / 1_000_000_000.0;
             double simulationDeltaTime = deltaTime * parameters.getSimulationSpeedFactor();
 
-            if (road != null) { // Добавлена проверка на null для road
+            if (road != null) {
                 step(simulationDeltaTime);
             }
 
-
             if (simulationPanel != null) {
-                // Передаем ссылку на текущий объект road, который может быть null если симуляция остановлена и не инициализирована
                 Road currentRoadForPanel = road;
                 double currentSimTimeForPanel = simulationTime;
                 SwingUtilities.invokeLater(() -> simulationPanel.updateSimulationState(currentRoadForPanel, currentSimTimeForPanel));
             }
 
             try {
-                // Задержка для управления скоростью симуляции и снижения нагрузки на CPU
-                // Более точное управление скоростью через simulationSpeedFactor
                 long sleepTime = Math.max(0, (long)(parameters.getSimulationTimeStep() * 1000 / parameters.getSimulationSpeedFactor() - elapsedTimeNano / 1_000_000));
-                // Thread.sleep(10); // Простая задержка
                 if (sleepTime > 0) {
                     Thread.sleep(sleepTime);
+                } else {
+                    Thread.sleep(1); // Минимальная пауза, чтобы отдать управление
                 }
-
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 running = false;
@@ -150,66 +140,69 @@ public class SimulationEngine implements Runnable {
     }
 
     private void step(double deltaTime) {
-        if (deltaTime <= 0 || road == null) return; // Дополнительная проверка на road
+        if (deltaTime <= 0 || road == null) return;
 
         simulationTime += deltaTime;
 
-        // 1. Генерация новых машин
-        if (flowGenerator != null) { // Проверка, что генератор инициализирован
-            Car newCar = flowGenerator.generateCar(deltaTime);
-            if (newCar != null) {
-                road.addCar(newCar);
+        if (flowGenerator != null) {
+            Car[] newCars = flowGenerator.generateCars(deltaTime);
+            if (newCars != null) {
+                for (Car newCar : newCars) {
+                    if (newCar != null) {
+                        road.addCar(newCar);
+                    }
+                }
             }
         }
 
-
-        // 2. Обновление светофоров
-        // Получаем список светофоров из текущего объекта road
-        List<TrafficLight> lights = road.getTrafficLights(); // Это неизменяемый список
-        // Для обновления нужно итерировать по нему и вызывать update у каждого светофора,
-        // но сам список светофоров в road должен быть изменяемым, если мы их добавляем/удаляем динамически.
-        // Однако, в нашем случае мы их добавляем только в initializeSimulation, так что просто итерируем.
+        List<TrafficLight> lights = road.getTrafficLights();
         if (lights != null) {
-            for (TrafficLight light : lights) { // Итерируемся по неизменяемой обертке
-                light.update(deltaTime); // Сам объект TrafficLight изменяемый
+            for (TrafficLight light : lights) {
+                light.update(deltaTime);
             }
         }
 
-
-        // 3. Обновление машин
-        List<Car> currentCars = road.getCars(); // Это CopyOnWriteArrayList, безопасен для итерации
+        List<Car> currentCars = road.getCars();
         if (currentCars != null) {
             for (Car car : currentCars) {
-                Car leadCar = findLeadCar(car, currentCars);
-                // Расстояние до машины впереди, учитывая ее задний бампер и наш передний
-                double distanceToLead = (leadCar != null) ? (leadCar.getPosition() - car.getPosition() - 10) : Double.POSITIVE_INFINITY; // 10м - примерная длина машины + буфер
+                Car leadCar = findLeadCar(car, currentCars, car.getDirection());
+                double distanceToLeadAbs = (leadCar != null) ? Math.abs(leadCar.getPosition() - car.getPosition()) - 10 : Double.POSITIVE_INFINITY;
                 double speedLimit = findEffectiveSpeedLimit(car);
-                TrafficLight nextLight = findNextTrafficLight(car);
-                double distanceToLight = (nextLight != null) ? nextLight.getPosition() - car.getPosition() : Double.POSITIVE_INFINITY;
+                TrafficLight nextLight = findNextTrafficLight(car, car.getDirection());
+                double distanceToLightAbs = (nextLight != null) ? Math.abs(nextLight.getPosition() - car.getPosition()) : Double.POSITIVE_INFINITY;
                 TrafficLightState nextLightState = (nextLight != null) ? nextLight.getCurrentState() : null;
 
-                car.update(deltaTime, leadCar, distanceToLead, speedLimit, nextLightState, distanceToLight);
+                car.update(deltaTime, leadCar, distanceToLeadAbs, speedLimit, nextLightState, distanceToLightAbs);
             }
         }
 
-
-        // 4. Удаление машин, уехавших с дороги
         if (road.getCars() != null) {
-            road.getCars().removeIf(car -> car.getPosition() > road.getLength() + 20); // +20м буфер
+            road.getCars().removeIf(car -> {
+                if (car.getDirection() == 0) {
+                    return car.getPosition() > road.getLength() + 20;
+                } else {
+                    return car.getPosition() < -20;
+                }
+            });
         }
     }
 
-    // Вспомогательные методы поиска
-    private Car findLeadCar(Car currentCar, List<Car> allCars) {
+    private Car findLeadCar(Car currentCar, List<Car> allCars, int direction) {
         if (allCars == null) return null;
         Car leader = null;
         double minDistance = Double.POSITIVE_INFINITY;
+
         for (Car otherCar : allCars) {
-            if (otherCar.getId() == currentCar.getId() || otherCar.getLaneIndex() != currentCar.getLaneIndex()) {
+            if (otherCar.getId() == currentCar.getId() || otherCar.getLaneIndex() != currentCar.getLaneIndex() || otherCar.getDirection() != direction) {
                 continue;
             }
-            double distance = otherCar.getPosition() - currentCar.getPosition();
-            if (distance > 0 && distance < minDistance) { // Машина должна быть строго впереди
+            double distance;
+            if (direction == 0) {
+                distance = otherCar.getPosition() - currentCar.getPosition();
+            } else {
+                distance = currentCar.getPosition() - otherCar.getPosition();
+            }
+            if (distance > 0 && distance < minDistance) {
                 minDistance = distance;
                 leader = otherCar;
             }
@@ -218,32 +211,35 @@ public class SimulationEngine implements Runnable {
     }
 
     private double findEffectiveSpeedLimit(Car car) {
-        // TODO: Реализовать поиск ближайшего знака ограничения скорости позади машины
-        // и учитывать его. Пока возвращаем максимальную скорость машины.
         return car.getMaxSpeed();
     }
 
-    private TrafficLight findNextTrafficLight(Car car) {
+    private TrafficLight findNextTrafficLight(Car car, int direction) {
         List<TrafficLight> lights = road.getTrafficLights();
         if (lights == null) return null;
-        // Светофоры отсортированы по позиции в Road.addTrafficLight
+        TrafficLight nextFoundLight = null;
+        double minDistance = Double.POSITIVE_INFINITY;
         for (TrafficLight light : lights) {
-            if (light.getPosition() > car.getPosition()) {
-                return light; // Первый же светофор впереди
+            double distance;
+            if (direction == 0) {
+                distance = light.getPosition() - car.getPosition();
+            } else {
+                distance = car.getPosition() - light.getPosition();
+            }
+            if (distance > 0 && distance < minDistance) {
+                minDistance = distance;
+                nextFoundLight = light;
             }
         }
-        return null; // Нет светофоров впереди
+        return nextFoundLight;
     }
 
     public void updateParameters(SimulationParameters newParams) {
         this.parameters = newParams;
-        // Если генератор потока зависит от параметров, которые могут измениться,
-        // его нужно либо обновить, либо пересоздать.
-        // Сейчас он пересоздается в initializeSimulation вместе с дорогой.
         if (this.flowGenerator != null) {
-            // this.flowGenerator.updateParameters(newParams); // Если бы был такой метод
+            this.flowGenerator.updateParameters(newParams);
         }
-        System.out.println("Параметры движка симуляции обновлены (фактически применятся при следующей инициализации).");
+        System.out.println("Параметры движка симуляции обновлены.");
     }
 
     public Road getRoad() {

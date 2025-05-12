@@ -1,159 +1,179 @@
 package com.trafficsimulation.gui;
 
-// Импортируем классы для отрисовки
-import javax.swing.JPanel;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.Color; // Для цветов
-import java.awt.Dimension; // Для установки предпочтительного размера
-
-// Импортируем классы модели, которые будем рисовать
+import javax.swing.*;
+import java.awt.*;
+// ... (остальные импорты как в предыдущей версии) ...
 import com.trafficsimulation.model.Road;
 import com.trafficsimulation.model.Car;
 import com.trafficsimulation.model.TrafficLight;
 import com.trafficsimulation.model.RoadSign;
 
-/**
- * Панель, отвечающая за визуализацию (отрисовку) состояния симуляции.
- * Наследуется от JPanel, стандартного компонента Swing для рисования.
- */
+
 public class SimulationPanel extends JPanel {
 
-    private Road currentRoad; // Ссылка на текущее состояние дороги
-    private double currentTime;   // Текущее время симуляции для отображения
+    private Road currentRoad;
+    private double currentTime;
+    private final int LANE_HEIGHT_PX = 30; // Сделаем высоту полосы константой
+    private final int CAR_WIDTH_PX = 10;   // Ширина машины
+    private final int CAR_HEIGHT_PX = LANE_HEIGHT_PX / 2 - 4; // Высота машины
 
     public SimulationPanel() {
-        // Устанавливаем предпочтительный размер панели, чтобы она корректно отображалась во фрейме
-        setPreferredSize(new Dimension(800, 600));
-        setBackground(Color.DARK_GRAY); // Задаем цвет фона
+        setPreferredSize(new Dimension(1000, 300)); // Ширина 1000, высота зависит от кол-ва полос, но зададим начальную
+        setBackground(new Color(0, 50, 0)); // Темно-зеленый фон (трава)
         System.out.println("SimulationPanel создана.");
     }
 
-    /**
-     * Метод, вызываемый движком симуляции для обновления данных перед перерисовкой.
-     * @param road Новое состояние дороги.
-     * @param time Текущее время симуляции.
-     */
     public void updateSimulationState(Road road, double time) {
         this.currentRoad = road;
         this.currentTime = time;
-        this.repaint(); // Говорим Swing, что панель нужно перерисовать
+        this.repaint();
     }
 
-    /**
-     * Главный метод отрисовки. Вызывается системой Swing, когда панель нужно перерисовать.
-     * Не вызывайте его напрямую, используйте repaint().
-     * @param g Графический контекст, на котором происходит рисование.
-     */
     @Override
     protected void paintComponent(Graphics g) {
-        super.paintComponent(g); // Обязательно вызываем метод родителя для очистки фона
-
-        // Преобразуем Graphics в Graphics2D для большего контроля
+        super.paintComponent(g);
         Graphics2D g2d = (Graphics2D) g;
+        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); // Сглаживание
 
-        // --- Начало отрисовки ---
         if (currentRoad == null) {
-            // Если симуляция еще не запущена или дорога не создана
             g2d.setColor(Color.WHITE);
-            g2d.drawString("Симуляция не запущена...", 50, 50);
-            return; // Больше ничего не рисуем
+            g2d.setFont(new Font("Arial", Font.BOLD, 20));
+            String text = "Симуляция не запущена...";
+            FontMetrics fm = g2d.getFontMetrics();
+            int x = (getWidth() - fm.stringWidth(text)) / 2;
+            int y = (getHeight() - fm.getHeight()) / 2 + fm.getAscent();
+            g2d.drawString(text, x, y);
+            return;
         }
 
-        // TODO: Добавить реальную отрисовку дороги, машин, светофоров, знаков
-        // Пример простой отрисовки:
-        drawRoad(g2d);
-        drawCars(g2d);
+        drawRoadSurface(g2d);
+        drawLanesAndMarkings(g2d);
         drawTrafficLights(g2d);
-        drawSigns(g2d);
-        drawInfo(g2d); // Отображение времени и кол-ва машин
-
-    } // конец paintComponent
-
-    // --- Вспомогательные методы отрисовки (пока заглушки) ---
-
-    private void drawRoad(Graphics2D g2d) {
-        // TODO: Нарисовать дорогу (прямоугольник, полосы)
-        int roadWidth = 60 * currentRoad.getNumberOfLanes(); // Примерная ширина полосы 60 пикс
-        int roadY = getHeight() / 2 - roadWidth / 2; // Центрируем дорогу по вертикали
-        g2d.setColor(Color.GRAY);
-        g2d.fillRect(0, roadY, getWidth(), roadWidth); // Рисуем дорогу на всю ширину панели
-
-        // Рисуем разметку (просто линии)
-        g2d.setColor(Color.WHITE);
-        for (int i = 1; i < currentRoad.getNumberOfLanes(); i++) {
-            int lineY = roadY + i * (roadWidth / currentRoad.getNumberOfLanes());
-            // Пунктирная линия (если есть поддержка)
-            // Stroke dashed = new BasicStroke(1, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{9}, 0);
-            // g2d.setStroke(dashed);
-            g2d.drawLine(0, lineY, getWidth(), lineY);
-        }
-        // Сплошная линия для осевой, если 2 направления
-        if (currentRoad.getNumberOfDirections() == 2) {
-            int centerLineY = roadY + roadWidth / 2;
-            // g2d.setStroke(new BasicStroke(2)); // Сделать линию толще
-            g2d.setColor(Color.YELLOW);
-            g2d.drawLine(0, centerLineY, getWidth(), centerLineY);
-        }
+        drawRoadSigns(g2d);
+        drawCars(g2d);
+        drawInfo(g2d);
     }
 
+    private void drawRoadSurface(Graphics2D g2d) {
+        int totalLanes = currentRoad.getNumberOfLanes();
+        int roadPixelHeight = totalLanes * LANE_HEIGHT_PX;
+        int roadY = getHeight() / 2 - roadPixelHeight / 2;
+
+        g2d.setColor(Color.DARK_GRAY); // Цвет асфальта
+        g2d.fillRect(0, roadY, getWidth(), roadPixelHeight);
+    }
+
+    private void drawLanesAndMarkings(Graphics2D g2d) {
+        int totalLanes = currentRoad.getNumberOfLanes();
+        int lanesPerDir = currentRoad.getNumberOfLanes() / currentRoad.getNumberOfDirections(); // Предполагаем симметрично
+        int roadPixelHeight = totalLanes * LANE_HEIGHT_PX;
+        int roadY = getHeight() / 2 - roadPixelHeight / 2;
+
+        g2d.setColor(Color.WHITE);
+        // Разделительные линии между полосами одного направления (пунктир)
+        Stroke dashed = new BasicStroke(1, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{9}, 0);
+        Stroke solid = new BasicStroke(1);
+
+        for (int i = 0; i < totalLanes; i++) {
+            if (i == 0) continue; // Не рисуем линию над самой верхней полосой
+
+            int lineY = roadY + i * LANE_HEIGHT_PX;
+
+            // Осевая линия, если 2 направления и это середина
+            if (currentRoad.getNumberOfDirections() == 2 && i == lanesPerDir) {
+                g2d.setStroke(new BasicStroke(2)); // Двойная сплошная или жирная желтая
+                g2d.setColor(Color.YELLOW);
+                g2d.drawLine(0, lineY, getWidth(), lineY);
+                // Если нужна двойная сплошная:
+                // g2d.drawLine(0, lineY - 1, getWidth(), lineY - 1);
+                // g2d.drawLine(0, lineY + 1, getWidth(), lineY + 1);
+            } else {
+                g2d.setStroke(dashed);
+                g2d.setColor(Color.WHITE);
+                g2d.drawLine(0, lineY, getWidth(), lineY);
+            }
+        }
+        g2d.setStroke(solid); // Возвращаем обычную линию
+    }
+
+
     private void drawCars(Graphics2D g2d) {
-        // TODO: Нарисовать машины в их позициях
-        g2d.setColor(Color.BLUE);
-        int roadWidth = 60 * currentRoad.getNumberOfLanes();
-        int roadY = getHeight() / 2 - roadWidth / 2;
-        int laneHeight = roadWidth / currentRoad.getNumberOfLanes();
+        if (currentRoad.getCars() == null) return;
+
+        int totalLanes = currentRoad.getNumberOfLanes();
+        int roadPixelHeight = totalLanes * LANE_HEIGHT_PX;
+        int roadY = getHeight() / 2 - roadPixelHeight / 2;
 
         for (Car car : currentRoad.getCars()) {
-            // Преобразуем позицию машины (метры) в координату X (пиксели)
-            // Масштаб: вся длина дороги currentRoad.getLength() соответствует ширине панели getWidth()
-            int carX = (int) ( (car.getPosition() / currentRoad.getLength()) * getWidth() );
+            // Масштабирование позиции машины на экране
+            int carScreenX = (int) ((car.getPosition() / currentRoad.getLength()) * getWidth());
 
-            // Преобразуем полосу машины в координату Y
-            int carY = roadY + car.getLaneIndex() * laneHeight + laneHeight / 4; // Центрируем машину на полосе
-            int carWidth = 20; // Ширина машины в пикселях
-            int carHeight = laneHeight / 2; // Высота машины в пикселях
+            // Y координата зависит от индекса полосы
+            int carScreenY = roadY + car.getLaneIndex() * LANE_HEIGHT_PX + (LANE_HEIGHT_PX - CAR_HEIGHT_PX) / 2;
 
-            g2d.fillRect(carX - carWidth / 2, carY, carWidth, carHeight); // Рисуем машину как прямоугольник
-            // Можно добавить ID машины
-            // g2d.setColor(Color.WHITE);
-            // g2d.drawString(String.valueOf(car.getId()), carX - carWidth / 2, carY + carHeight / 2);
-            // g2d.setColor(Color.BLUE);
+            if (car.getDirection() == 0) {
+                g2d.setColor(Color.CYAN); // Цвет для машин слева направо
+            } else {
+                g2d.setColor(Color.PINK); // Цвет для машин справа налево
+            }
+            g2d.fillRect(carScreenX - CAR_WIDTH_PX / 2, carScreenY, CAR_WIDTH_PX, CAR_HEIGHT_PX);
+
+            // Отрисовка ID машины (для отладки)
+            // g2d.setColor(Color.BLACK);
+            // g2d.drawString(String.valueOf(car.getId()), carScreenX - CAR_WIDTH_PX/2, carScreenY + CAR_HEIGHT_PX/2);
         }
     }
 
     private void drawTrafficLights(Graphics2D g2d) {
-        // TODO: Нарисовать светофоры
-        for (TrafficLight light : currentRoad.getTrafficLights()) {
-            int lightX = (int) ( (light.getPosition() / currentRoad.getLength()) * getWidth() );
-            int lightY = getHeight() / 2 - 50; // Над дорогой
-            int lightSize = 15;
+        if (currentRoad.getTrafficLights() == null) return;
+        int roadPixelHeight = currentRoad.getNumberOfLanes() * LANE_HEIGHT_PX;
+        int roadY = getHeight() / 2 - roadPixelHeight / 2;
 
-            // Рисуем кружок соответствующего цвета
+        for (TrafficLight light : currentRoad.getTrafficLights()) {
+            int lightScreenX = (int) ((light.getPosition() / currentRoad.getLength()) * getWidth());
+            int lightSize = LANE_HEIGHT_PX / 2;
+
+            // Рисуем светофор над дорогой (для направления 0) и под дорогой (для направления 1)
+            // Это упрощение, в реальности светофоры могут быть сложнее
+            int lightScreenYDir0 = roadY - lightSize - 5;
+            // int lightScreenYDir1 = roadY + roadPixelHeight + 5;
+
             switch (light.getCurrentState()) {
                 case RED: g2d.setColor(Color.RED); break;
                 case YELLOW: g2d.setColor(Color.YELLOW); break;
                 case GREEN: g2d.setColor(Color.GREEN); break;
                 default: g2d.setColor(Color.BLACK); break;
             }
-            g2d.fillOval(lightX - lightSize / 2, lightY, lightSize, lightSize);
+            g2d.fillOval(lightScreenX - lightSize / 2, lightScreenYDir0, lightSize, lightSize);
+            // Если нужно дублировать для другого направления:
+            // g2d.fillOval(lightScreenX - lightSize / 2, lightScreenYDir1, lightSize, lightSize);
         }
     }
 
-    private void drawSigns(Graphics2D g2d) {
-        // TODO: Нарисовать знаки
-        g2d.setColor(Color.CYAN);
+    private void drawRoadSigns(Graphics2D g2d) {
+        // ... (код этого метода пока можно оставить без изменений, если знаки общие)
+        // ... или адаптировать их позицию Y аналогично светофорам, если они специфичны для направления
+        if (currentRoad.getRoadSigns() == null) return;
+        int roadPixelHeight = currentRoad.getNumberOfLanes() * LANE_HEIGHT_PX;
+        int roadY = getHeight() / 2 - roadPixelHeight / 2;
+        g2d.setColor(Color.WHITE);
+        g2d.setFont(new Font("Arial", Font.PLAIN, 10));
         for(RoadSign sign : currentRoad.getRoadSigns()){
             int signX = (int) ( (sign.getPosition() / currentRoad.getLength()) * getWidth() );
-            int signY = getHeight() / 2 + 50; // Под дорогой
-            g2d.drawString(sign.getType().name().replace("_"," "), signX, signY); // Пишем тип знака
+            int signY = roadY + roadPixelHeight + 15; // Под дорогой
+            g2d.drawString(sign.getType().name().replace("_"," "), signX - 15, signY);
         }
     }
 
     private void drawInfo(Graphics2D g2d) {
+        // ... (код этого метода не меняется) ...
         g2d.setColor(Color.WHITE);
+        g2d.setFont(new Font("Arial", Font.PLAIN, 12));
         g2d.drawString(String.format("Время: %.2f c", currentTime), 10, 20);
-        g2d.drawString("Машин: " + (currentRoad != null ? currentRoad.getCars().size() : 0), 10, 40);
+        g2d.drawString("Машин: " + (currentRoad != null && currentRoad.getCars() != null ? currentRoad.getCars().size() : 0), 10, 40);
+        if (currentRoad != null) {
+            g2d.drawString("Тип: " + currentRoad.getType() + ", Полос: " + currentRoad.getNumberOfLanes() +
+                    ", Направлений: " + currentRoad.getNumberOfDirections(), 10, 60);
+        }
     }
-
-} // конец класса SimulationPanel
+}
