@@ -117,25 +117,26 @@ public class TrafficFlowGenerator {
 
     private Car createNewCarWithRandomParams(int direction) {
         double initialPosition;
-        int baseLane; // Начальная полоса в рамках своего направления (0, 1, ...)
+        int baseLane;
         int totalLanesInDirection = params.getLanesPerDirection();
 
-        if (direction == 0) { // Слева направо
+        if (direction == 0) {
             initialPosition = 0.0;
-            baseLane = random.nextInt(totalLanesInDirection); // Полоса 0, 1, ... (lanesPerDirection - 1)
-        } else { // Справа налево
-            initialPosition = road.getLength(); // Начинает с конца дороги
-            baseLane = totalLanesInDirection + random.nextInt(totalLanesInDirection); // Полоса lanesPerDirection, ...
+            baseLane = random.nextInt(totalLanesInDirection);
+        } else {
+            initialPosition = road.getLength();
+            baseLane = totalLanesInDirection + random.nextInt(totalLanesInDirection);
         }
 
         double initialSpeedKmh = generateRandomInitialSpeedKmh();
         double initialSpeedMs = initialSpeedKmh / 3.6;
         double maxSpeedMs = initialSpeedMs * (1.2 + random.nextDouble() * 0.3);
-        maxSpeedMs = Math.max(initialSpeedMs, maxSpeedMs);
-        double acceleration = 1.5 + random.nextDouble() * 1.5;
-        double deceleration = 3.0 + random.nextDouble() * 2.0;
+        maxSpeedMs = Math.max(initialSpeedMs, Math.min(maxSpeedMs, 150.0/3.6)); // Ограничиваем максималку
 
-        return new Car(initialPosition, initialSpeedMs, maxSpeedMs, acceleration, deceleration, baseLane, direction);
+        double acceleration = 1.8 + random.nextDouble() * 1.2; // 1.8 - 3.0 м/с^2 (чуть выше)
+        double baseDeceleration = 2.5 + random.nextDouble() * 1.5; // 2.5 - 4.0 м/с^2 (комфортное)
+
+        return new Car(initialPosition, initialSpeedMs, maxSpeedMs, acceleration, baseDeceleration, baseLane, direction);
     }
 
     private Car createNewCarDeterministicParams(int direction) {
@@ -153,11 +154,12 @@ public class TrafficFlowGenerator {
 
         double initialSpeedMs = params.getDeterministicSpeedKmh() / 3.6;
         double maxSpeedMs = initialSpeedMs * (1.2 + random.nextDouble() * 0.3);
-        maxSpeedMs = Math.max(initialSpeedMs, maxSpeedMs);
-        double acceleration = 1.5 + random.nextDouble() * 1.5;
-        double deceleration = 3.0 + random.nextDouble() * 2.0;
+        maxSpeedMs = Math.max(initialSpeedMs, Math.min(maxSpeedMs, 150.0/3.6));
 
-        return new Car(initialPosition, initialSpeedMs, maxSpeedMs, acceleration, deceleration, baseLane, direction);
+        double acceleration = 1.8 + random.nextDouble() * 1.2;
+        double baseDeceleration = 2.5 + random.nextDouble() * 1.5;
+
+        return new Car(initialPosition, initialSpeedMs, maxSpeedMs, acceleration, baseDeceleration, baseLane, direction);
     }
 
     public void updateParameters(SimulationParameters newParams) {
