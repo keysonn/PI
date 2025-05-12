@@ -8,14 +8,15 @@ import java.awt.RenderingHints;
 import java.awt.FontMetrics;
 
 import com.trafficsimulation.model.*;
+// import com.trafficsimulation.gui.VisualizationMode; // УДАЛЯЕМ ИМПОРТ
 
 public class SimulationPanel extends JPanel {
 
     private Road currentRoad;
     private double currentTime;
     private final int LANE_HEIGHT_PX = 30;
-    private final int CAR_WIDTH_PX = 20;
-    private final int CAR_HEIGHT_PX = LANE_HEIGHT_PX / 2 - 2;
+    private final int CAR_WIDTH_PX = 22;
+    private final int CAR_HEIGHT_PX = 12;
 
     private Font carSpeedFont;
     private Font roadSignFont;
@@ -23,13 +24,15 @@ public class SimulationPanel extends JPanel {
     private Font placementHintFont;
     private Font trafficLightTimerFont;
 
+    // private VisualizationMode currentVizMode = VisualizationMode.STANDARD; // УДАЛЯЕМ ПОЛЕ
+
     private boolean isInPlacementMode = false;
     private String placementObjectType = null;
     private Point mousePosition = null;
 
     public SimulationPanel() {
         setPreferredSize(new Dimension(1000, 400));
-        setBackground(new Color(34, 139, 34)); // ForestGreen
+        setBackground(new Color(34, 139, 34));
         carSpeedFont = new Font("Arial", Font.BOLD, 10);
         roadSignFont = new Font("Arial", Font.BOLD, 9);
         infoFont = new Font("Arial", Font.PLAIN, 12);
@@ -73,6 +76,11 @@ public class SimulationPanel extends JPanel {
         repaint();
     }
 
+    // public void setVisualizationMode(VisualizationMode mode) { // УДАЛЯЕМ МЕТОД
+    //    this.currentVizMode = mode;
+    //    this.repaint();
+    // }
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -82,25 +90,19 @@ public class SimulationPanel extends JPanel {
         if (currentRoad == null) {
             g2d.setColor(Color.WHITE);
             g2d.setFont(new Font("Arial", Font.BOLD, 20));
-            String text = isInPlacementMode ? "Инициализируйте дорогу (Настройки) для расстановки." : "Инициализация...";
+            String text = isInPlacementMode ? "Инициализируйте дорогу (Настройки/Старт) для расстановки." : "Инициализация...";
             FontMetrics fm = g2d.getFontMetrics();
             int x = (getWidth() - fm.stringWidth(text)) / 2;
             int y = (getHeight() - fm.getHeight()) / 2 + fm.getAscent();
             g2d.drawString(text, x, y);
         } else {
-            // Дорога есть, рисуем все компоненты
             drawRoadSurface(g2d);
             drawLanesAndMarkings(g2d);
             drawTrafficLights(g2d);
             drawRoadSigns(g2d);
-            // Машины рисуются, только если они есть в списке currentRoad.getCars()
-            // currentTime > 0 не является строгим условием для их наличия,
-            // т.к. пользователь мог остановить симуляцию, когда машины были на дороге.
             drawCars(g2d);
         }
-
-        drawInfo(g2d); // Информацию рисуем всегда
-
+        drawInfo(g2d);
         if (isInPlacementMode && placementObjectType != null && mousePosition != null) {
             drawPlacementHint(g2d);
         }
@@ -119,7 +121,7 @@ public class SimulationPanel extends JPanel {
         int totalLanes = currentRoad.getNumberOfLanes();
         int roadPixelHeight = totalLanes * LANE_HEIGHT_PX;
         int roadY = getHeight() / 2 - roadPixelHeight / 2;
-        g2d.setColor(new Color(105, 105, 105)); // DimGray
+        g2d.setColor(new Color(105, 105, 105));
         g2d.fillRect(0, roadY, getWidth(), roadPixelHeight);
     }
 
@@ -162,17 +164,36 @@ public class SimulationPanel extends JPanel {
         for (Car car : currentRoad.getCars()) {
             int carScreenX = (int) ((car.getPosition() / currentRoad.getLength()) * getWidth());
             int carScreenY = roadY + car.getLaneIndex() * LANE_HEIGHT_PX + (LANE_HEIGHT_PX - CAR_HEIGHT_PX) / 2;
+            int carRectX = carScreenX - CAR_WIDTH_PX / 2;
+
+            Color carBodyColor;
+            Color carCabinColor;
+
+            // Возвращаем стандартную раскраску
             if (car.getDirection() == 0) {
-                g2d.setColor(new Color(0, 191, 255));
+                carBodyColor = new Color(0, 150, 255);
+                carCabinColor = new Color(100, 200, 255);
             } else {
-                g2d.setColor(new Color(255, 105, 180));
+                carBodyColor = new Color(255, 60, 150);
+                carCabinColor = new Color(255, 130, 200);
             }
-            g2d.fillRect(carScreenX - CAR_WIDTH_PX / 2, carScreenY, CAR_WIDTH_PX, CAR_HEIGHT_PX);
+
+            g2d.setColor(carBodyColor);
+            g2d.fillRoundRect(carRectX, carScreenY, CAR_WIDTH_PX, CAR_HEIGHT_PX, 5, 5);
+            int cabinWidth = CAR_WIDTH_PX * 2 / 3;
+            int cabinHeight = CAR_HEIGHT_PX * 2 / 3;
+            int cabinOffsetX = (CAR_WIDTH_PX - cabinWidth) / 2;
+            int cabinOffsetY = (CAR_HEIGHT_PX - cabinHeight) / 4;
+            g2d.setColor(carCabinColor);
+            g2d.fillRoundRect(carRectX + cabinOffsetX, carScreenY + cabinOffsetY, cabinWidth, cabinHeight, 3,3);
             g2d.setColor(Color.BLACK);
+            g2d.drawRoundRect(carRectX, carScreenY, CAR_WIDTH_PX, CAR_HEIGHT_PX, 5, 5);
+
+            g2d.setColor(Color.BLACK); // Цвет текста скорости всегда черный
             String speedText = String.format("%.0f", car.getCurrentSpeed() * 3.6);
             int textWidth = fmCarSpeed.stringWidth(speedText);
             int textX = carScreenX - textWidth / 2;
-            int textY = carScreenY + (CAR_HEIGHT_PX - fmCarSpeed.getHeight()) / 2 + fmCarSpeed.getAscent();
+            int textY = carScreenY + fmCarSpeed.getAscent() - 1;
             g2d.drawString(speedText, textX, textY);
         }
     }
@@ -186,10 +207,8 @@ public class SimulationPanel extends JPanel {
             int lightScreenX = (int) ((light.getPosition() / currentRoad.getLength()) * getWidth());
             int lightSize = LANE_HEIGHT_PX / 2 + 2;
             int lightScreenY = roadY - lightSize - 5;
-
             g2d.setColor(Color.DARK_GRAY.darker());
             g2d.fillRect(lightScreenX - 2, lightScreenY + lightSize, 4, roadY - (lightScreenY + lightSize));
-
             switch (light.getCurrentState()) {
                 case RED: g2d.setColor(Color.RED); break;
                 case GREEN: g2d.setColor(Color.GREEN); break;
@@ -198,7 +217,6 @@ public class SimulationPanel extends JPanel {
             g2d.fillOval(lightScreenX - lightSize / 2, lightScreenY, lightSize, lightSize);
             g2d.setColor(Color.BLACK);
             g2d.drawOval(lightScreenX - lightSize / 2, lightScreenY, lightSize, lightSize);
-
             String timeText = String.format("%.0f", light.getRemainingTime());
             g2d.setFont(trafficLightTimerFont);
             FontMetrics fmTimer = g2d.getFontMetrics();
