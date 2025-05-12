@@ -8,7 +8,6 @@ import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.awt.event.ActionListener;
-import java.awt.event.ItemEvent;
 
 public class SettingsDialog extends JDialog {
 
@@ -18,315 +17,358 @@ public class SettingsDialog extends JDialog {
     // Дорога
     private JComboBox<RoadType> roadTypeComboBox;
     private JSpinner roadLengthSpinner;
-    private JSpinner lanesPerDirectionSpinner;
-    private JSpinner numDirectionsSpinner;
+    private JToggleButton dirOneWayButton, dirTwoWayButton;
+    private ButtonGroup directionGroup;
+    private JSlider lanesSlider;
 
-    // Тип потока
-    private JRadioButton deterministicFlowRadio;
-    private JRadioButton randomFlowRadio;
-    private ButtonGroup flowTypeGroup;
+    // Тоннель
+    private JPanel commonRoadSettingsPanelContainer;
+    private JPanel tunnelSettingsPanel;
+    private JSpinner tunnelRedLightSpinner, tunnelGreenLightSpinner;
 
-    private JPanel detFlowSettingsPanel;
-    private JPanel randomFlowSettingsPanel;
-
-    // Детерминированный поток
-    private JSpinner detIntervalSpinner;
-    private JSpinner detSpeedSpinner;
-
-    // Случайный поток - Время
-    private JComboBox<DistributionLaw> timeDistLawComboBox;
-    private JPanel timeParametersHostPanel; // Панель-хозяин для timeUniform/Normal/ExponentialPanel
-    private JPanel timeUniformPanel, timeNormalPanel, timeExponentialPanel;
-    private JSpinner timeUniformMinSpinner, timeUniformMaxSpinner;
-    private JSpinner timeNormalMeanSpinner, timeNormalVarianceSpinner;
-    private JSpinner timeExponentialIntensitySpinner;
-
-    // Случайный поток - Скорость
-    private JComboBox<DistributionLaw> speedDistLawComboBox;
-    private JPanel speedParametersHostPanel; // Панель-хозяин для speedUniform/Normal/ExponentialPanel
-    private JPanel speedUniformPanel, speedNormalPanel, speedExponentialPanel;
+    // Скоростной режим
+    private JToggleButton speedDeterministicRadio, speedRandomRadio;
+    private ButtonGroup speedFlowTypeGroup;
+    private JPanel speedDeterministicPanel, speedRandomPanelContainer;
+    private JSpinner speedDetValueSpinner;
+    private JToggleButton speedLawUniform, speedLawNormal, speedLawExponential;
+    private ButtonGroup speedLawGroup;
+    private JPanel speedParamsUniformPanel, speedParamsNormalPanel, speedParamsExponentialPanel;
     private JSpinner speedUniformMinSpinner, speedUniformMaxSpinner;
     private JSpinner speedNormalMeanSpinner, speedNormalVarianceSpinner;
     private JSpinner speedExponentialIntensitySpinner;
 
+    // Настройка времени
+    private JToggleButton timeDeterministicRadio, timeRandomRadio;
+    private ButtonGroup timeFlowTypeGroup;
+    private JPanel timeDeterministicPanel, timeRandomPanelContainer;
+    private JSpinner timeDetValueSpinner;
+    private JToggleButton timeLawUniform, timeLawNormal, timeLawExponential;
+    private ButtonGroup timeLawGroup;
+    private JPanel timeParamsUniformPanel, timeParamsNormalPanel, timeParamsExponentialPanel;
+    private JSpinner timeUniformMinSpinner, timeUniformMaxSpinner;
+    private JSpinner timeNormalMeanSpinner, timeNormalVarianceSpinner;
+    private JSpinner timeExponentialIntensitySpinner;
+
 
     public SettingsDialog(Frame owner, SimulationParameters currentParams) {
-        super(owner, "Настройки симуляции", true);
+        super(owner, "Настройки", true);
         this.params = currentParams;
 
         initComponents();
-        layoutComponents();
+        layoutMainDialog();
         addListeners();
-        loadParameters(); // Важно вызвать ПОСЛЕ layoutComponents и addListeners
+        loadParameters();
+
+        updateRoadSettingsVisibility();
+        updateSpeedSettingsVisibility();
+        updateTimeSettingsVisibility();
 
         pack();
+        setMinimumSize(new Dimension(Math.max(680, getPreferredSize().width), getPreferredSize().height));
         setLocationRelativeTo(owner);
     }
 
     private void initComponents() {
         // Дорога
-        roadTypeComboBox = new JComboBox<>(RoadType.values());
+        roadTypeComboBox = new JComboBox<>(new RoadType[]{RoadType.CITY_ROAD, RoadType.HIGHWAY, RoadType.TUNNEL});
         roadLengthSpinner = new JSpinner(new SpinnerNumberModel(5.0, 1.0, 50.0, 0.5));
-        lanesPerDirectionSpinner = new JSpinner(new SpinnerNumberModel(2, 1, 4, 1));
-        numDirectionsSpinner = new JSpinner(new SpinnerNumberModel(1, 1, 2, 1));
+        dirOneWayButton = new JToggleButton("Одностороннее", true);
+        dirTwoWayButton = new JToggleButton("Двустороннее");
+        directionGroup = new ButtonGroup();
+        directionGroup.add(dirOneWayButton); directionGroup.add(dirTwoWayButton);
+        lanesSlider = new JSlider(JSlider.HORIZONTAL, 1, 4, 2);
+        lanesSlider.setMajorTickSpacing(1); lanesSlider.setPaintTicks(true);
+        lanesSlider.setPaintLabels(true); lanesSlider.setSnapToTicks(true);
+        // Тоннель
+        tunnelRedLightSpinner = new JSpinner(new SpinnerNumberModel(30, 20, 100, 1));
+        tunnelGreenLightSpinner = new JSpinner(new SpinnerNumberModel(30, 20, 100, 1));
+        // Скоростной режим
+        speedDeterministicRadio = new JToggleButton("Детерминированный");
+        speedRandomRadio = new JToggleButton("Случайный");
+        speedFlowTypeGroup = new ButtonGroup();
+        speedFlowTypeGroup.add(speedDeterministicRadio); speedFlowTypeGroup.add(speedRandomRadio);
+        speedDetValueSpinner = new JSpinner(new SpinnerNumberModel(60.0, 20.0, 130.0, 5.0));
+        speedLawUniform = new JToggleButton("Равномерный");
+        speedLawNormal = new JToggleButton("Нормальный");
+        speedLawExponential = new JToggleButton("Показательный");
+        speedLawGroup = new ButtonGroup();
+        speedLawGroup.add(speedLawUniform); speedLawGroup.add(speedLawNormal); speedLawGroup.add(speedLawExponential);
+        speedUniformMinSpinner = new JSpinner(new SpinnerNumberModel(40.0, 20.0, 130.0, 1.0));
+        speedUniformMaxSpinner = new JSpinner(new SpinnerNumberModel(80.0, 20.0, 130.0, 1.0));
+        speedNormalMeanSpinner = new JSpinner(new SpinnerNumberModel(60.0, 20.0, 130.0, 1.0));
+        speedNormalVarianceSpinner = new JSpinner(new SpinnerNumberModel(10.0, 0.0, 40.0, 1.0));
+        speedExponentialIntensitySpinner = new JSpinner(new SpinnerNumberModel(1.0, 0.01, 10.0, 0.01)); // Параметр формы, не интенсивность потока
+        // Настройка времени
+        timeDeterministicRadio = new JToggleButton("Детерминированный");
+        timeRandomRadio = new JToggleButton("Случайный");
+        timeFlowTypeGroup = new ButtonGroup();
+        timeFlowTypeGroup.add(timeDeterministicRadio); timeFlowTypeGroup.add(timeRandomRadio);
+        timeDetValueSpinner = new JSpinner(new SpinnerNumberModel(10.0, 10.0, 15.0, 0.5));
+        timeLawUniform = new JToggleButton("Равномерный");
+        timeLawNormal = new JToggleButton("Нормальный");
+        timeLawExponential = new JToggleButton("Показательный");
+        timeLawGroup = new ButtonGroup();
+        timeLawGroup.add(timeLawUniform); timeLawGroup.add(timeLawNormal); timeLawGroup.add(timeLawExponential);
+        timeUniformMinSpinner = new JSpinner(new SpinnerNumberModel(10.0, 10.0, 15.0, 0.1));
+        timeUniformMaxSpinner = new JSpinner(new SpinnerNumberModel(15.0, 10.0, 15.0, 0.1));
+        timeNormalMeanSpinner = new JSpinner(new SpinnerNumberModel(20.0, 20.0, 120.0, 1.0));
+        timeNormalVarianceSpinner = new JSpinner(new SpinnerNumberModel(5.0, 0.0, 20.0, 0.1));
+        // ИЗМЕНЕНИЕ ЗДЕСЬ: Минимальная интенсивность 0.2 авто/сек, максимальная 20 авто/сек
+        timeExponentialIntensitySpinner = new JSpinner(new SpinnerNumberModel(1.0, 0.2, 20.0, 0.1)); // авто/сек
 
-        // Тип потока
-        deterministicFlowRadio = new JRadioButton("Детерминированный");
-        randomFlowRadio = new JRadioButton("Случайный");
-        flowTypeGroup = new ButtonGroup();
-        flowTypeGroup.add(deterministicFlowRadio);
-        flowTypeGroup.add(randomFlowRadio);
-
-        // Детерминированный поток
-        detIntervalSpinner = new JSpinner(new SpinnerNumberModel(15.0, 1.0, 300.0, 0.5));
-        detSpeedSpinner = new JSpinner(new SpinnerNumberModel(60.0, 10.0, 150.0, 5.0));
-
-        // Случайный поток - Время
-        timeDistLawComboBox = new JComboBox<>(DistributionLaw.values());
-        timeUniformMinSpinner = new JSpinner(new SpinnerNumberModel(10.0, 0.1, 300.0, 0.1));
-        timeUniformMaxSpinner = new JSpinner(new SpinnerNumberModel(15.0, 0.2, 300.0, 0.1));
-        timeNormalMeanSpinner = new JSpinner(new SpinnerNumberModel(20.0, 1.0, 300.0, 0.1));
-        timeNormalVarianceSpinner = new JSpinner(new SpinnerNumberModel(5.0, 0.0, 100.0, 0.1));
-        timeExponentialIntensitySpinner = new JSpinner(new SpinnerNumberModel(0.1, 0.001, 5.0, 0.01));
-
-        // Случайный поток - Скорость
-        speedDistLawComboBox = new JComboBox<>(DistributionLaw.values());
-        speedUniformMinSpinner = new JSpinner(new SpinnerNumberModel(40.0, 10.0, 150.0, 1.0));
-        speedUniformMaxSpinner = new JSpinner(new SpinnerNumberModel(80.0, 10.0, 150.0, 1.0));
-        speedNormalMeanSpinner = new JSpinner(new SpinnerNumberModel(60.0, 10.0, 150.0, 1.0));
-        speedNormalVarianceSpinner = new JSpinner(new SpinnerNumberModel(10.0, 0.0, 100.0, 1.0));
-        speedExponentialIntensitySpinner = new JSpinner(new SpinnerNumberModel(1.0, 0.1, 10.0, 0.1));
-
-        // Создаем панели для параметров каждого закона (наполним их в createRandomFlowSettingsPanel)
-        timeUniformPanel = createParameterPanel(new String[]{"Мин. интервал (с):", "Макс. интервал (с):"}, timeUniformMinSpinner, timeUniformMaxSpinner);
-        timeNormalPanel = createParameterPanel(new String[]{"МО интервала (с):", "Дисперсия интервала (с^2):"}, timeNormalMeanSpinner, timeNormalVarianceSpinner);
-        timeExponentialPanel = createParameterPanel(new String[]{"Интенсивность (1/с):"}, timeExponentialIntensitySpinner);
-
-        speedUniformPanel = createParameterPanel(new String[]{"Мин. скорость (км/ч):", "Макс. скорость (км/ч):"}, speedUniformMinSpinner, speedUniformMaxSpinner);
-        speedNormalPanel = createParameterPanel(new String[]{"МО скорости (км/ч):", "Дисперсия скорости ((км/ч)^2):"}, speedNormalMeanSpinner, speedNormalVarianceSpinner);
-        speedExponentialPanel = createParameterPanel(new String[]{"Параметр формы (скорость):"}, speedExponentialIntensitySpinner);
+        speedParamsUniformPanel = createSingleLawParameterPanel(new String[]{"Укажите нижнюю границу:", "Укажите верхнюю границу:"}, new String[]{"км/ч", "км/ч"}, speedUniformMinSpinner, speedUniformMaxSpinner);
+        speedParamsNormalPanel = createSingleLawParameterPanel(new String[]{"Укажите математическое ожидание:", "Укажите дисперсию:"}, new String[]{"км/ч", "(км/ч)²"}, speedNormalMeanSpinner, speedNormalVarianceSpinner);
+        speedParamsExponentialPanel = createSingleLawParameterPanel(new String[]{"Задайте параметр интенсивности:"}, new String[]{"1/(км/ч)"}, speedExponentialIntensitySpinner); // Название параметра может быть неточным для скорости
+        timeParamsUniformPanel = createSingleLawParameterPanel(new String[]{"Укажите нижнюю границу:", "Укажите верхнюю границу:"}, new String[]{"сек", "сек"}, timeUniformMinSpinner, timeUniformMaxSpinner);
+        timeParamsNormalPanel = createSingleLawParameterPanel(new String[]{"Укажите математическое ожидание:", "Укажите дисперсию:"}, new String[]{"сек", "сек²"}, timeNormalMeanSpinner, timeNormalVarianceSpinner);
+        timeParamsExponentialPanel = createSingleLawParameterPanel(new String[]{"Задайте интенсивность времени:"}, new String[]{"авто/сек"}, timeExponentialIntensitySpinner);
     }
 
-    // Вспомогательный метод для создания панелей с параметрами законов
-    private JPanel createParameterPanel(String[] labels, JComponent... components) {
+    private JPanel createSingleLawParameterPanel(String[] labels, String[] units, JComponent... components) {
         JPanel panel = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(2, 5, 2, 5);
-        gbc.anchor = GridBagConstraints.WEST;
+        gbc.insets = new Insets(2, 5, 2, 5); gbc.anchor = GridBagConstraints.WEST;
         for (int i = 0; i < labels.length; i++) {
             gbc.gridx = 0; gbc.gridy = i; panel.add(new JLabel(labels[i]), gbc);
-            gbc.gridx = 1; gbc.gridy = i; panel.add(components[i], gbc);
+            JPanel valuePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+            valuePanel.add(components[i]);
+            if (units != null && units.length > i && units[i] != null) valuePanel.add(new JLabel(" " + units[i]));
+            gbc.gridx = 1; gbc.gridy = i; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0; panel.add(valuePanel, gbc);
         }
         return panel;
     }
 
-
-    private void layoutComponents() {
+    private void layoutMainDialog() {
         setLayout(new BorderLayout(10, 10));
-        JPanel mainSettingsPanel = new JPanel();
-        mainSettingsPanel.setLayout(new BoxLayout(mainSettingsPanel, BoxLayout.Y_AXIS));
-        mainSettingsPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-
-        mainSettingsPanel.add(createRoadSettingsPanel());
-        mainSettingsPanel.add(Box.createVerticalStrut(10));
-        mainSettingsPanel.add(createFlowTypeSelectionPanel());
-        mainSettingsPanel.add(Box.createVerticalStrut(5));
-
-        detFlowSettingsPanel = createDeterministicFlowSettingsPanel();
-        randomFlowSettingsPanel = createRandomFlowSettingsPanel();
-
-        mainSettingsPanel.add(detFlowSettingsPanel);
-        mainSettingsPanel.add(randomFlowSettingsPanel);
-
-        add(mainSettingsPanel, BorderLayout.CENTER);
-
-        JButton saveButton = new JButton("Сохранить");
+        JTabbedPane tabbedPane = new JTabbedPane();
+        JPanel roadSettingsTabPanel = new JPanel();
+        roadSettingsTabPanel.setLayout(new BoxLayout(roadSettingsTabPanel, BoxLayout.Y_AXIS));
+        roadSettingsTabPanel.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
+        JPanel roadTypePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        roadTypePanel.add(new JLabel("Выберите тип автодороги:"));
+        roadTypePanel.add(roadTypeComboBox);
+        roadSettingsTabPanel.add(roadTypePanel);
+        commonRoadSettingsPanelContainer = createCommonRoadSettingsPanel();
+        roadSettingsTabPanel.add(commonRoadSettingsPanelContainer);
+        tunnelSettingsPanel = createTunnelSettingsPanel();
+        roadSettingsTabPanel.add(tunnelSettingsPanel);
+        tabbedPane.addTab("Параметры автодороги", roadSettingsTabPanel);
+        JPanel modelingSettingsTabPanel = new JPanel(new GridLayout(1, 2, 10, 0));
+        modelingSettingsTabPanel.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
+        modelingSettingsTabPanel.add(createSpeedSettingsMainPanel());
+        modelingSettingsTabPanel.add(createTimeSettingsMainPanel());
+        tabbedPane.addTab("Параметры моделирования", modelingSettingsTabPanel);
+        add(tabbedPane, BorderLayout.CENTER);
+        JButton saveButton = new JButton("Сохранить настройки");
         saveButton.addActionListener(e -> saveAndClose());
-        JButton cancelButton = new JButton("Отмена");
-        cancelButton.addActionListener(e -> dispose());
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        buttonPanel.add(saveButton);
-        buttonPanel.add(cancelButton);
-        add(buttonPanel, BorderLayout.SOUTH);
+        JPanel buttonPanelSouth = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        buttonPanelSouth.add(saveButton);
+        add(buttonPanelSouth, BorderLayout.SOUTH);
     }
 
-    private JPanel createRoadSettingsPanel() {
+    private JPanel createCommonRoadSettingsPanel() {
         JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBorder(BorderFactory.createTitledBorder("Параметры дороги"));
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5, 5, 5, 5);
-        gbc.anchor = GridBagConstraints.WEST;
-
-        gbc.gridx = 0; gbc.gridy = 0; panel.add(new JLabel("Тип дороги:"), gbc);
-        gbc.gridx = 1; gbc.gridy = 0; gbc.fill = GridBagConstraints.HORIZONTAL; panel.add(roadTypeComboBox, gbc);
+        gbc.insets = new Insets(5,5,5,5); gbc.anchor = GridBagConstraints.WEST;
+        gbc.gridy = 0; gbc.gridx = 0; panel.add(new JLabel("Направление движения:"), gbc);
+        JPanel dirPanel = new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));
+        dirPanel.add(dirOneWayButton); dirPanel.add(dirTwoWayButton);
+        gbc.gridx = 1; panel.add(dirPanel, gbc);
+        gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Количество полос (в 1 напр.):"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; panel.add(lanesSlider, gbc);
         gbc.fill = GridBagConstraints.NONE;
-
-        gbc.gridx = 0; gbc.gridy = 1; panel.add(new JLabel("Длина (км):"), gbc);
-        gbc.gridx = 1; gbc.gridy = 1; panel.add(roadLengthSpinner, gbc);
-
-        gbc.gridx = 0; gbc.gridy = 2; panel.add(new JLabel("Полос в одном направлении:"), gbc);
-        gbc.gridx = 1; gbc.gridy = 2; panel.add(lanesPerDirectionSpinner, gbc);
-
-        gbc.gridx = 0; gbc.gridy = 3; panel.add(new JLabel("Кол-во направлений:"), gbc);
-        gbc.gridx = 1; gbc.gridy = 3; panel.add(numDirectionsSpinner, gbc);
+        gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Длина участка автодороги:"), gbc);
+        JPanel lengthPanel = new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));
+        lengthPanel.add(roadLengthSpinner); lengthPanel.add(new JLabel(" км"));
+        gbc.gridx = 1; panel.add(lengthPanel, gbc);
         return panel;
     }
-
-    private JPanel createFlowTypeSelectionPanel() {
-        JPanel flowTypePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        flowTypePanel.setBorder(BorderFactory.createTitledBorder("Тип транспортного потока"));
-        flowTypePanel.add(deterministicFlowRadio);
-        flowTypePanel.add(randomFlowRadio);
-        return flowTypePanel;
-    }
-
-    private JPanel createDeterministicFlowSettingsPanel() {
+    private JPanel createTunnelSettingsPanel(){
         JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBorder(BorderFactory.createTitledBorder(null,"Настройки детерминированного потока", TitledBorder.LEFT, TitledBorder.TOP));
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(2, 5, 2, 5);
-        gbc.anchor = GridBagConstraints.WEST;
-
-        gbc.gridx = 0; gbc.gridy = 0; panel.add(new JLabel("Интервал появления (сек):"), gbc);
-        gbc.gridx = 1; gbc.gridy = 0; panel.add(detIntervalSpinner, gbc);
-
-        gbc.gridx = 0; gbc.gridy = 1; panel.add(new JLabel("Скорость машин (км/ч):"), gbc);
-        gbc.gridx = 1; gbc.gridy = 1; panel.add(detSpeedSpinner, gbc);
+        gbc.insets = new Insets(5,5,5,5); gbc.anchor = GridBagConstraints.WEST;
+        gbc.gridy = 0; gbc.gridx = 0; panel.add(new JLabel("Длина красного света:"), gbc);
+        JPanel redPanel = new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));
+        redPanel.add(tunnelRedLightSpinner); redPanel.add(new JLabel(" секунд"));
+        gbc.gridx = 1; panel.add(redPanel, gbc);
+        gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Длина зеленого света:"), gbc);
+        JPanel greenPanel = new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));
+        greenPanel.add(tunnelGreenLightSpinner); greenPanel.add(new JLabel(" секунд"));
+        gbc.gridx = 1; panel.add(greenPanel, gbc);
         return panel;
     }
 
-    private JPanel createRandomFlowSettingsPanel() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBorder(BorderFactory.createTitledBorder(null,"Настройки случайного потока", TitledBorder.LEFT, TitledBorder.TOP));
+    private JPanel createSpeedSettingsMainPanel() {
+        JPanel mainPanel = new JPanel();
+        mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
+        mainPanel.setBorder(BorderFactory.createTitledBorder("Настройка скоростного режима"));
+        JPanel typeSelectionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        typeSelectionPanel.add(new JLabel("Выберите тип потока:"));
+        typeSelectionPanel.add(speedDeterministicRadio); typeSelectionPanel.add(speedRandomRadio);
+        mainPanel.add(typeSelectionPanel);
+        speedDeterministicPanel = createSingleLawParameterPanel(new String[]{"Задайте скорость:"}, new String[]{"км/ч"}, speedDetValueSpinner);
+        mainPanel.add(speedDeterministicPanel);
+        speedRandomPanelContainer = new JPanel();
+        speedRandomPanelContainer.setLayout(new BoxLayout(speedRandomPanelContainer, BoxLayout.Y_AXIS));
+        JPanel lawSelectionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        lawSelectionPanel.add(new JLabel("Выберите закон распределения:"));
+        lawSelectionPanel.add(speedLawUniform); lawSelectionPanel.add(speedLawNormal); lawSelectionPanel.add(speedLawExponential);
+        speedRandomPanelContainer.add(lawSelectionPanel);
+        speedRandomPanelContainer.add(speedParamsUniformPanel);
+        speedRandomPanelContainer.add(speedParamsNormalPanel);
+        speedRandomPanelContainer.add(speedParamsExponentialPanel);
+        mainPanel.add(speedRandomPanelContainer);
+        return mainPanel;
+    }
 
-        // --- Настройки ВРЕМЕНИ ---
-        JPanel timeSectionPanel = new JPanel(new BorderLayout(5,5)); // Это контейнер для ComboBox и timeParametersHostPanel
-        timeSectionPanel.setBorder(BorderFactory.createTitledBorder("Время появления"));
-        timeSectionPanel.add(timeDistLawComboBox, BorderLayout.NORTH);
-        timeParametersHostPanel = new JPanel(new BorderLayout()); // Используем BorderLayout для смены панелей
-        timeSectionPanel.add(timeParametersHostPanel, BorderLayout.CENTER);
-        panel.add(timeSectionPanel);
-
-        // --- Настройки СКОРОСТИ ---
-        JPanel speedSectionPanel = new JPanel(new BorderLayout(5,5)); // Аналогично для скорости
-        speedSectionPanel.setBorder(BorderFactory.createTitledBorder("Скоростной режим"));
-        speedSectionPanel.add(speedDistLawComboBox, BorderLayout.NORTH);
-        speedParametersHostPanel = new JPanel(new BorderLayout());
-        speedSectionPanel.add(speedParametersHostPanel, BorderLayout.CENTER);
-        panel.add(speedSectionPanel);
-
-        return panel;
+    private JPanel createTimeSettingsMainPanel() {
+        JPanel mainPanel = new JPanel();
+        mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
+        mainPanel.setBorder(BorderFactory.createTitledBorder("Настройка времени"));
+        JPanel typeSelectionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        typeSelectionPanel.add(new JLabel("Выберите тип потока:"));
+        typeSelectionPanel.add(timeDeterministicRadio); typeSelectionPanel.add(timeRandomRadio);
+        mainPanel.add(typeSelectionPanel);
+        timeDeterministicPanel = createSingleLawParameterPanel(new String[]{"Задайте интервал появления:"}, new String[]{"сек"}, timeDetValueSpinner);
+        mainPanel.add(timeDeterministicPanel);
+        timeRandomPanelContainer = new JPanel();
+        timeRandomPanelContainer.setLayout(new BoxLayout(timeRandomPanelContainer, BoxLayout.Y_AXIS));
+        JPanel lawSelectionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        lawSelectionPanel.add(new JLabel("Выберите закон распределения:"));
+        lawSelectionPanel.add(timeLawUniform); lawSelectionPanel.add(timeLawNormal); lawSelectionPanel.add(timeLawExponential);
+        timeRandomPanelContainer.add(lawSelectionPanel);
+        timeRandomPanelContainer.add(timeParamsUniformPanel);
+        timeRandomPanelContainer.add(timeParamsNormalPanel);
+        timeRandomPanelContainer.add(timeParamsExponentialPanel);
+        mainPanel.add(timeRandomPanelContainer);
+        return mainPanel;
     }
 
     private void addListeners() {
-        ActionListener flowTypeListener = e -> updateFlowPanelsVisibility();
-        deterministicFlowRadio.addActionListener(flowTypeListener);
-        randomFlowRadio.addActionListener(flowTypeListener);
-
-        timeDistLawComboBox.addItemListener(e -> {
-            if (e.getStateChange() == ItemEvent.SELECTED) {
-                updateDistributionPanelVisibility((DistributionLaw) e.getItem(), timeParametersHostPanel,
-                        timeUniformPanel, timeNormalPanel, timeExponentialPanel);
-            }
-        });
-
-        speedDistLawComboBox.addItemListener(e -> {
-            if (e.getStateChange() == ItemEvent.SELECTED) {
-                updateDistributionPanelVisibility((DistributionLaw) e.getItem(), speedParametersHostPanel,
-                        speedUniformPanel, speedNormalPanel, speedExponentialPanel);
-            }
-        });
+        roadTypeComboBox.addActionListener(e -> updateRoadSettingsVisibility());
+        ActionListener speedFlowTypeListener = e -> updateSpeedSettingsVisibility();
+        speedDeterministicRadio.addActionListener(speedFlowTypeListener);
+        speedRandomRadio.addActionListener(speedFlowTypeListener);
+        ActionListener speedLawListener = e -> updateSpeedLawPanelsVisibility();
+        speedLawUniform.addActionListener(speedLawListener);
+        speedLawNormal.addActionListener(speedLawListener);
+        speedLawExponential.addActionListener(speedLawListener);
+        ActionListener timeFlowTypeListener = e -> updateTimeSettingsVisibility();
+        timeDeterministicRadio.addActionListener(timeFlowTypeListener);
+        timeRandomRadio.addActionListener(timeFlowTypeListener);
+        ActionListener timeLawListener = e -> updateTimeLawPanelsVisibility();
+        timeLawUniform.addActionListener(timeLawListener);
+        timeLawNormal.addActionListener(timeLawListener);
+        timeLawExponential.addActionListener(timeLawListener);
     }
 
-    private void updateFlowPanelsVisibility() {
-        boolean isRandom = randomFlowRadio.isSelected();
-        detFlowSettingsPanel.setVisible(!isRandom);
-        randomFlowSettingsPanel.setVisible(isRandom);
-        if (this.getContentPane() != null) {
-            this.pack();
-        }
+    private void updateRoadSettingsVisibility() {
+        RoadType selectedType = (RoadType) roadTypeComboBox.getSelectedItem();
+        boolean isTunnel = (selectedType == RoadType.TUNNEL);
+        if (commonRoadSettingsPanelContainer != null) commonRoadSettingsPanelContainer.setVisible(!isTunnel);
+        if (tunnelSettingsPanel != null) tunnelSettingsPanel.setVisible(isTunnel);
+        SwingUtilities.invokeLater(() -> { if (isVisible()) pack(); });
     }
 
-    private void updateDistributionPanelVisibility(DistributionLaw selectedLaw, JPanel hostPanel,
-                                                   JPanel uniformPanel, JPanel normalPanel, JPanel exponentialPanel) {
-        hostPanel.removeAll(); // Очищаем предыдущую панель параметров
-
-        switch (selectedLaw) {
-            case UNIFORM:
-                hostPanel.add(uniformPanel, BorderLayout.CENTER);
-                break;
-            case NORMAL:
-                hostPanel.add(normalPanel, BorderLayout.CENTER);
-                break;
-            case EXPONENTIAL:
-                hostPanel.add(exponentialPanel, BorderLayout.CENTER);
-                break;
-        }
-        hostPanel.revalidate();
-        hostPanel.repaint();
-        //this.pack(); // Вызов pack здесь может быть слишком частым, лучше делать его в updateFlowPanelsVisibility
+    private void updateSpeedSettingsVisibility() {
+        boolean isRandom = speedRandomRadio.isSelected();
+        speedDeterministicPanel.setVisible(!isRandom);
+        speedRandomPanelContainer.setVisible(isRandom);
+        if (isRandom) updateSpeedLawPanelsVisibility();
+        SwingUtilities.invokeLater(() -> { if (isVisible()) pack(); });
     }
-
+    private void updateSpeedLawPanelsVisibility() {
+        if (!speedRandomRadio.isSelected()) return;
+        speedParamsUniformPanel.setVisible(speedLawUniform.isSelected());
+        speedParamsNormalPanel.setVisible(speedLawNormal.isSelected());
+        speedParamsExponentialPanel.setVisible(speedLawExponential.isSelected());
+        SwingUtilities.invokeLater(() -> { if (isVisible()) pack(); });
+    }
+    private void updateTimeSettingsVisibility() {
+        boolean isRandom = timeRandomRadio.isSelected();
+        timeDeterministicPanel.setVisible(!isRandom);
+        timeRandomPanelContainer.setVisible(isRandom);
+        if (isRandom) updateTimeLawPanelsVisibility();
+        SwingUtilities.invokeLater(() -> { if (isVisible()) pack(); });
+    }
+    private void updateTimeLawPanelsVisibility() {
+        if (!timeRandomRadio.isSelected()) return;
+        timeParamsUniformPanel.setVisible(timeLawUniform.isSelected());
+        timeParamsNormalPanel.setVisible(timeLawNormal.isSelected());
+        timeParamsExponentialPanel.setVisible(timeLawExponential.isSelected());
+        SwingUtilities.invokeLater(() -> { if (isVisible()) pack(); });
+    }
 
     private void loadParameters() {
         roadTypeComboBox.setSelectedItem(params.getRoadType());
         roadLengthSpinner.setValue(params.getRoadLengthKm());
-        lanesPerDirectionSpinner.setValue(params.getLanesPerDirection());
-        numDirectionsSpinner.setValue(params.getNumberOfDirections());
+        if (params.getNumberOfDirections() == 1) dirOneWayButton.setSelected(true);
+        else dirTwoWayButton.setSelected(true);
+        lanesSlider.setValue(params.getLanesPerDirection());
 
-        deterministicFlowRadio.setSelected(!params.isRandomFlow());
-        randomFlowRadio.setSelected(params.isRandomFlow());
-
-        detIntervalSpinner.setValue(params.getDeterministicIntervalSeconds());
-        detSpeedSpinner.setValue(params.getDeterministicSpeedKmh());
-
-        timeDistLawComboBox.setSelectedItem(params.getTimeDistributionLaw());
-        timeUniformMinSpinner.setValue(params.getTimeUniformMinSec());
-        timeUniformMaxSpinner.setValue(params.getTimeUniformMaxSec());
-        timeNormalMeanSpinner.setValue(params.getTimeNormalMeanSec());
-        timeNormalVarianceSpinner.setValue(params.getTimeNormalVarianceSec());
-        timeExponentialIntensitySpinner.setValue(params.getTimeExponentialIntensityPerSec());
-
-        speedDistLawComboBox.setSelectedItem(params.getSpeedDistributionLaw());
+        speedDeterministicRadio.setSelected(!params.isRandomSpeedFlow());
+        speedRandomRadio.setSelected(params.isRandomSpeedFlow());
+        speedDetValueSpinner.setValue(params.getDeterministicSpeedKmh());
+        DistributionLaw speedLaw = params.getSpeedDistributionLaw();
+        if (speedLaw == DistributionLaw.UNIFORM) speedLawUniform.setSelected(true);
+        else if (speedLaw == DistributionLaw.NORMAL) speedLawNormal.setSelected(true);
+        else if (speedLaw == DistributionLaw.EXPONENTIAL) speedLawExponential.setSelected(true);
+        else speedLawNormal.setSelected(true);
         speedUniformMinSpinner.setValue(params.getSpeedUniformMinKmh());
         speedUniformMaxSpinner.setValue(params.getSpeedUniformMaxKmh());
         speedNormalMeanSpinner.setValue(params.getSpeedNormalMeanKmh());
         speedNormalVarianceSpinner.setValue(params.getSpeedNormalVarianceKmh());
         speedExponentialIntensitySpinner.setValue(params.getSpeedExponentialIntensityPerKmh());
 
-        updateFlowPanelsVisibility(); // Управляет видимостью detFlowSettingsPanel и randomFlowSettingsPanel
-        // Обновляем панели законов после основной логики видимости
-        updateDistributionPanelVisibility(params.getTimeDistributionLaw(), timeParametersHostPanel,
-                timeUniformPanel, timeNormalPanel, timeExponentialPanel);
-        updateDistributionPanelVisibility(params.getSpeedDistributionLaw(), speedParametersHostPanel,
-                speedUniformPanel, speedNormalPanel, speedExponentialPanel);
+        timeDeterministicRadio.setSelected(!params.isRandomTimeFlow());
+        timeRandomRadio.setSelected(params.isRandomTimeFlow());
+        timeDetValueSpinner.setValue(params.getDeterministicIntervalSeconds());
+        DistributionLaw timeLaw = params.getTimeDistributionLaw();
+        if (timeLaw == DistributionLaw.UNIFORM) timeLawUniform.setSelected(true);
+        else if (timeLaw == DistributionLaw.NORMAL) timeLawNormal.setSelected(true);
+        else if (timeLaw == DistributionLaw.EXPONENTIAL) timeLawExponential.setSelected(true);
+        else timeLawNormal.setSelected(true);
+        timeUniformMinSpinner.setValue(params.getTimeUniformMinSec());
+        timeUniformMaxSpinner.setValue(params.getTimeUniformMaxSec());
+        timeNormalMeanSpinner.setValue(params.getTimeNormalMeanSec());
+        timeNormalVarianceSpinner.setValue(params.getTimeNormalVarianceSec());
+        timeExponentialIntensitySpinner.setValue(params.getTimeExponentialIntensityPerSec());
     }
 
     private void saveAndClose() {
         params.setRoadType((RoadType) roadTypeComboBox.getSelectedItem());
         params.setRoadLengthKm(((Number) roadLengthSpinner.getValue()).doubleValue());
-        params.setLanesPerDirection(((Number) lanesPerDirectionSpinner.getValue()).intValue());
-        params.setNumberOfDirections(((Number) numDirectionsSpinner.getValue()).intValue());
+        params.setNumberOfDirections(dirOneWayButton.isSelected() ? 1 : 2);
+        params.setLanesPerDirection(lanesSlider.getValue());
 
-        params.setRandomFlow(randomFlowRadio.isSelected());
+        params.setRandomSpeedFlow(speedRandomRadio.isSelected());
+        if (params.isRandomSpeedFlow()){
+            if(speedLawUniform.isSelected()) params.setSpeedDistributionLaw(DistributionLaw.UNIFORM);
+            else if(speedLawNormal.isSelected()) params.setSpeedDistributionLaw(DistributionLaw.NORMAL);
+            else params.setSpeedDistributionLaw(DistributionLaw.EXPONENTIAL);
+            params.setSpeedUniformMinKmh(((Number) speedUniformMinSpinner.getValue()).doubleValue());
+            params.setSpeedUniformMaxKmh(((Number) speedUniformMaxSpinner.getValue()).doubleValue());
+            params.setSpeedNormalMeanKmh(((Number) speedNormalMeanSpinner.getValue()).doubleValue());
+            params.setSpeedNormalVarianceKmh(((Number) speedNormalVarianceSpinner.getValue()).doubleValue());
+            params.setSpeedExponentialIntensityPerKmh(((Number) speedExponentialIntensitySpinner.getValue()).doubleValue());
+        } else {
+            params.setDeterministicSpeedKmh(((Number) speedDetValueSpinner.getValue()).doubleValue());
+        }
 
-        params.setDeterministicIntervalSeconds(((Number) detIntervalSpinner.getValue()).doubleValue());
-        params.setDeterministicSpeedKmh(((Number) detSpeedSpinner.getValue()).doubleValue());
-
-        params.setTimeDistributionLaw((DistributionLaw) timeDistLawComboBox.getSelectedItem());
-        params.setTimeUniformMinSec(((Number) timeUniformMinSpinner.getValue()).doubleValue());
-        params.setTimeUniformMaxSec(((Number) timeUniformMaxSpinner.getValue()).doubleValue());
-        params.setTimeNormalMeanSec(((Number) timeNormalMeanSpinner.getValue()).doubleValue());
-        params.setTimeNormalVarianceSec(((Number) timeNormalVarianceSpinner.getValue()).doubleValue());
-        params.setTimeExponentialIntensityPerSec(((Number) timeExponentialIntensitySpinner.getValue()).doubleValue());
-
-        params.setSpeedDistributionLaw((DistributionLaw) speedDistLawComboBox.getSelectedItem());
-        params.setSpeedUniformMinKmh(((Number) speedUniformMinSpinner.getValue()).doubleValue());
-        params.setSpeedUniformMaxKmh(((Number) speedUniformMaxSpinner.getValue()).doubleValue());
-        params.setSpeedNormalMeanKmh(((Number) speedNormalMeanSpinner.getValue()).doubleValue());
-        params.setSpeedNormalVarianceKmh(((Number) speedNormalVarianceSpinner.getValue()).doubleValue());
-        params.setSpeedExponentialIntensityPerKmh(((Number) speedExponentialIntensitySpinner.getValue()).doubleValue());
+        params.setRandomTimeFlow(timeRandomRadio.isSelected());
+        if (params.isRandomTimeFlow()){
+            if(timeLawUniform.isSelected()) params.setTimeDistributionLaw(DistributionLaw.UNIFORM);
+            else if(timeLawNormal.isSelected()) params.setTimeDistributionLaw(DistributionLaw.NORMAL);
+            else params.setTimeDistributionLaw(DistributionLaw.EXPONENTIAL);
+            params.setTimeUniformMinSec(((Number) timeUniformMinSpinner.getValue()).doubleValue());
+            params.setTimeUniformMaxSec(((Number) timeUniformMaxSpinner.getValue()).doubleValue());
+            params.setTimeNormalMeanSec(((Number) timeNormalMeanSpinner.getValue()).doubleValue());
+            params.setTimeNormalVarianceSec(((Number) timeNormalVarianceSpinner.getValue()).doubleValue());
+            params.setTimeExponentialIntensityPerSec(((Number) timeExponentialIntensitySpinner.getValue()).doubleValue());
+        } else {
+            params.setDeterministicIntervalSeconds(((Number) timeDetValueSpinner.getValue()).doubleValue());
+        }
 
         settingsSaved = true;
         dispose();

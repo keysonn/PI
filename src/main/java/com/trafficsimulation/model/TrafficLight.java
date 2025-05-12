@@ -12,13 +12,12 @@ public class TrafficLight {
     private double timeInCurrentState;
     private final int targetDirection; // 0 для направления 0, 1 для направления 1
 
-    public TrafficLight(double position, double redDuration, double greenDuration,
-                        TrafficLightState initialState, int targetDirection) {
+    public TrafficLight(double position, double redDuration, double greenDuration, int targetDirection) {
         this.id = idCounter++;
         this.position = position;
         this.redDuration = Math.max(20.0, Math.min(redDuration, 100.0));
         this.greenDuration = Math.max(20.0, Math.min(greenDuration, 100.0));
-        this.currentState = initialState;
+        this.currentState = TrafficLightState.GREEN; // По умолчанию зеленый
         this.targetDirection = targetDirection;
         this.timeInCurrentState = 0.0;
         System.out.println("Создан TrafficLight ID=" + this.id + " на поз. " + String.format("%.1f",this.position) +
@@ -35,7 +34,7 @@ public class TrafficLight {
                 }
                 break;
             case RED:
-                if (timeInCurrentState >= redDuration) {
+                if (timeInCurrentState >= greenDuration) { // Ошибка была здесь, должно быть redDuration
                     currentState = TrafficLightState.GREEN;
                     timeInCurrentState = 0;
                 }

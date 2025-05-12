@@ -11,10 +11,9 @@ import java.util.List;
 import com.trafficsimulation.model.RoadSign;
 import com.trafficsimulation.model.RoadSignType;
 import com.trafficsimulation.model.TrafficLight;
-import com.trafficsimulation.model.TrafficLightState;
+import com.trafficsimulation.model.TrafficLightState; // Используется в openTrafficLightSettingsDialog
 import com.trafficsimulation.simulation.SimulationEngine;
 import com.trafficsimulation.simulation.SimulationParameters;
-// import com.trafficsimulation.gui.VisualizationMode; // УДАЛЕН ИМПОРТ
 
 public class MainFrame extends JFrame {
 
@@ -28,7 +27,6 @@ public class MainFrame extends JFrame {
     private JButton settingsButton;
     private JButton addTrafficLightButton;
     private JButton addRoadSignButton;
-    // private JComboBox<VisualizationMode> vizModeComboBox; // УДАЛЕНО
 
     private enum PlacementMode { NONE, ADD_TRAFFIC_LIGHT, ADD_ROAD_SIGN }
     private PlacementMode currentPlacementMode = PlacementMode.NONE;
@@ -44,7 +42,6 @@ public class MainFrame extends JFrame {
 
         simulationParameters = new SimulationParameters();
         simulationPanel = new SimulationPanel();
-        // simulationPanel.setVisualizationMode(...); // УДАЛЕНО
         simulationEngine = new SimulationEngine(simulationParameters, simulationPanel);
 
         simulationPanel.updateSimulationState(simulationEngine.getRoad(), simulationEngine.getSimulationTime());
@@ -175,7 +172,6 @@ public class MainFrame extends JFrame {
         panel.add(addRoadSignButton);
         panel.add(Box.createHorizontalStrut(10));
         panel.add(settingsButton);
-        // Удалены элементы для vizModeComboBox
 
         return panel;
     }
@@ -185,7 +181,6 @@ public class MainFrame extends JFrame {
         settingsButton.setEnabled(simNotRunningOrStopped);
         addTrafficLightButton.setEnabled(simNotRunningOrStopped);
         addRoadSignButton.setEnabled(simNotRunningOrStopped);
-        // vizModeComboBox.setEnabled(true); // УДАЛЕНО
 
         pauseButton.setEnabled(!simNotRunningOrStopped);
         if (simNotRunningOrStopped) {
@@ -267,7 +262,6 @@ public class MainFrame extends JFrame {
         }
         JSpinner redDurationSpinner = new JSpinner(new SpinnerNumberModel(30, 20, 100, 1));
         JSpinner greenDurationSpinner = new JSpinner(new SpinnerNumberModel(30, 20, 100, 1));
-        JComboBox<TrafficLightState> initialStateComboBox = new JComboBox<>(new TrafficLightState[]{TrafficLightState.RED, TrafficLightState.GREEN});
 
         JComboBox<String> directionComboBox = null;
         String[] directionChoices = {"Направление 1 (->)", "Направление 2 (<-)"};
@@ -283,8 +277,6 @@ public class MainFrame extends JFrame {
         gbc.gridx = 1; panel.add(redDurationSpinner, gbc);
         gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Длительность зеленого (с):"), gbc);
         gbc.gridx = 1; panel.add(greenDurationSpinner, gbc);
-        gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Начальное состояние:"), gbc);
-        gbc.gridx = 1; panel.add(initialStateComboBox, gbc);
 
         if (directionComboBox != null) {
             gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Действует на:"), gbc);
@@ -298,17 +290,16 @@ public class MainFrame extends JFrame {
         if (result == JOptionPane.OK_OPTION) {
             double red = ((Number) redDurationSpinner.getValue()).doubleValue();
             double green = ((Number) greenDurationSpinner.getValue()).doubleValue();
-            TrafficLightState initialState = (TrafficLightState) initialStateComboBox.getSelectedItem();
             int targetDirection = 0;
             if (simulationEngine.getRoad().getNumberOfDirections() == 1) {
-                targetDirection = 0; // Если одно направление, светофор всегда для него
+                targetDirection = 0;
             } else if (directionComboBox != null && directionComboBox.getSelectedIndex() == 1) {
                 targetDirection = 1;
             }
             simulationEngine.getRoad().addTrafficLight(
-                    new TrafficLight(position, red, green, initialState, targetDirection)
+                    new TrafficLight(position, red, green, targetDirection) // Используем новый конструктор
             );
-            System.out.println("Добавлен светофор: pos=" + position + ", R=" + red + ", G=" + green + ", Init=" + initialState + ", Dir=" + targetDirection);
+            System.out.println("Добавлен светофор: pos=" + position + ", R=" + red + ", G=" + green + ", Dir=" + targetDirection + " (нач. сост. GREEN)");
             simulationPanel.updateSimulationState(simulationEngine.getRoad(), simulationEngine.getSimulationTime());
         }
     }
@@ -349,7 +340,7 @@ public class MainFrame extends JFrame {
                 targetDirection = 1;
             }
             simulationEngine.getRoad().addRoadSign(
-                    new RoadSign(position, selectedType, targetDirection)
+                    new RoadSign(position, selectedType, targetDirection) // Используем новый конструктор
             );
             System.out.println("Добавлен знак: pos=" + position + ", тип=" + selectedType + ", Dir=" + targetDirection);
             simulationPanel.updateSimulationState(simulationEngine.getRoad(), simulationEngine.getSimulationTime());

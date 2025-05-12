@@ -1,11 +1,7 @@
-package com.trafficsimulation.simulation; // или com.trafficsimulation.model
+package com.trafficsimulation.simulation;
 
-/**
- * Типы законов распределения случайных величин.
- * (ТЗ, Приложение, п. 1.15 - 3 закона)
- */
 public enum DistributionLaw {
-    UNIFORM,      // Равномерное
-    NORMAL,       // Нормальное (Гауссово)
-    EXPONENTIAL   // Показательное (Экспоненциальное)
+    UNIFORM,
+    NORMAL,
+    EXPONENTIAL
 }
