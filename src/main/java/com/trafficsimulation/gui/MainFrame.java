@@ -6,15 +6,15 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.util.List; // Для проверки существующих объектов
+import java.util.List;
 
-import com.trafficsimulation.model.RoadSign; // Для проверки существующих объектов
+import com.trafficsimulation.model.RoadSign;
 import com.trafficsimulation.model.RoadSignType;
-import com.trafficsimulation.model.TrafficLight; // Для проверки существующих объектов
+import com.trafficsimulation.model.TrafficLight;
 import com.trafficsimulation.model.TrafficLightState;
 import com.trafficsimulation.simulation.SimulationEngine;
 import com.trafficsimulation.simulation.SimulationParameters;
-// import com.trafficsimulation.gui.VisualizationMode; // УДАЛЯЕМ ЭТОТ ИМПОРТ
+// import com.trafficsimulation.gui.VisualizationMode; // УДАЛЕН ИМПОРТ
 
 public class MainFrame extends JFrame {
 
@@ -28,23 +28,23 @@ public class MainFrame extends JFrame {
     private JButton settingsButton;
     private JButton addTrafficLightButton;
     private JButton addRoadSignButton;
-    // private JComboBox<VisualizationMode> vizModeComboBox; // УДАЛЯЕМ ПОЛЕ
+    // private JComboBox<VisualizationMode> vizModeComboBox; // УДАЛЕНО
 
     private enum PlacementMode { NONE, ADD_TRAFFIC_LIGHT, ADD_ROAD_SIGN }
     private PlacementMode currentPlacementMode = PlacementMode.NONE;
 
-    // Минимальное расстояние между объектами на дороге (в метрах)
     private static final double MIN_OBJECT_SPACING_METERS = 15.0;
+    private static final double MIN_EDGE_SPACING_METERS = 7.5;
 
 
     public MainFrame() {
-        setTitle("Система моделирования движения транспорта v0.6"); // Обновим версию
+        setTitle("Система моделирования движения транспорта v0.7");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
 
         simulationParameters = new SimulationParameters();
         simulationPanel = new SimulationPanel();
-        // simulationPanel.setVisualizationMode(VisualizationMode.STANDARD); // УДАЛЯЕМ
+        // simulationPanel.setVisualizationMode(...); // УДАЛЕНО
         simulationEngine = new SimulationEngine(simulationParameters, simulationPanel);
 
         simulationPanel.updateSimulationState(simulationEngine.getRoad(), simulationEngine.getSimulationTime());
@@ -72,16 +72,6 @@ public class MainFrame extends JFrame {
         settingsButton = new JButton("Настройки");
         addTrafficLightButton = new JButton("Добавить светофор");
         addRoadSignButton = new JButton("Добавить знак");
-        // vizModeComboBox = new JComboBox<>(VisualizationMode.values()); // УДАЛЯЕМ
-        // vizModeComboBox.setToolTipText("Выберите режим визуализации"); // УДАЛЯЕМ
-        /* // УДАЛЯЕМ ActionListener для vizModeComboBox
-        vizModeComboBox.addActionListener(e -> {
-            VisualizationMode selectedMode = (VisualizationMode) vizModeComboBox.getSelectedItem();
-            if (selectedMode != null && simulationPanel != null) {
-                simulationPanel.setVisualizationMode(selectedMode);
-            }
-        });
-        */
 
         pauseButton.setEnabled(false);
         stopButton.setEnabled(false);
@@ -152,7 +142,7 @@ public class MainFrame extends JFrame {
                 JOptionPane.showMessageDialog(this, "Сначала инициализируйте дорогу.", "Ошибка", JOptionPane.ERROR_MESSAGE);
                 return;
             }
-            if (simulationEngine.getRoad().getTrafficLights().size() >= 2) { // ТЗ: максимальное количество светофоров – 2
+            if (simulationEngine.getRoad().getTrafficLights().size() >= 2) {
                 JOptionPane.showMessageDialog(this, "Достигнут лимит светофоров (макс. 2).", "Лимит", JOptionPane.INFORMATION_MESSAGE);
                 return;
             }
@@ -169,8 +159,6 @@ public class MainFrame extends JFrame {
                 JOptionPane.showMessageDialog(this, "Сначала инициализируйте дорогу.", "Ошибка", JOptionPane.ERROR_MESSAGE);
                 return;
             }
-            // Здесь можно добавить лимит на общее количество знаков, если он есть в ТЗ.
-            // Пока что без лимита на знаки (кроме контроля наложения).
             if (!startButton.isEnabled() && stopButton.isEnabled()) {
                 stopButton.doClick();
             }
@@ -187,9 +175,7 @@ public class MainFrame extends JFrame {
         panel.add(addRoadSignButton);
         panel.add(Box.createHorizontalStrut(10));
         panel.add(settingsButton);
-        // panel.add(Box.createHorizontalStrut(10)); // УДАЛЯЕМ
-        // panel.add(new JLabel("Вид:")); // УДАЛЯЕМ
-        // panel.add(vizModeComboBox); // УДАЛЯЕМ
+        // Удалены элементы для vizModeComboBox
 
         return panel;
     }
@@ -199,7 +185,7 @@ public class MainFrame extends JFrame {
         settingsButton.setEnabled(simNotRunningOrStopped);
         addTrafficLightButton.setEnabled(simNotRunningOrStopped);
         addRoadSignButton.setEnabled(simNotRunningOrStopped);
-        // vizModeComboBox.setEnabled(true); // УДАЛЯЕМ (комбобокса больше нет)
+        // vizModeComboBox.setEnabled(true); // УДАЛЕНО
 
         pauseButton.setEnabled(!simNotRunningOrStopped);
         if (simNotRunningOrStopped) {
@@ -227,43 +213,38 @@ public class MainFrame extends JFrame {
                     simulationPanel.setPlacementMode(false, null);
                     return;
                 }
-
-                // --- КОНТРОЛЬ РАЗМЕЩЕНИЯ: Проверка наложения ---
                 if (!isPlacementPositionValid(positionOnRoad)) {
                     JOptionPane.showMessageDialog(MainFrame.this,
-                            "Невозможно разместить объект слишком близко к другому.",
+                            "Невозможно разместить объект слишком близко к другому или к краю дороги.",
                             "Ошибка размещения", JOptionPane.WARNING_MESSAGE);
                     currentPlacementMode = PlacementMode.NONE;
                     simulationPanel.setPlacementMode(false, null);
                     return;
                 }
-                // --- КОНЕЦ КОНТРОЛЯ РАЗМЕЩЕНИЯ ---
-
-
                 if (currentPlacementMode == PlacementMode.ADD_TRAFFIC_LIGHT) {
                     openTrafficLightSettingsDialog(positionOnRoad);
                 } else if (currentPlacementMode == PlacementMode.ADD_ROAD_SIGN) {
                     openRoadSignSettingsDialog(positionOnRoad);
                 }
-
                 currentPlacementMode = PlacementMode.NONE;
                 simulationPanel.setPlacementMode(false, null);
             }
         });
     }
 
-    /**
-     * Проверяет, можно ли разместить новый объект на указанной позиции
-     * (не слишком ли близко к существующим светофорам или знакам).
-     */
     private boolean isPlacementPositionValid(double newPosition) {
-        if (simulationEngine.getRoad() == null) return false; // На всякий случай
-
+        if (simulationEngine.getRoad() == null) return false;
+        if (newPosition < MIN_EDGE_SPACING_METERS ||
+                newPosition > (simulationEngine.getRoad().getLength() - MIN_EDGE_SPACING_METERS)) {
+            System.out.println("Попытка разместить объект слишком близко к краю дороги: " + newPosition);
+            return false;
+        }
         List<TrafficLight> lights = simulationEngine.getRoad().getTrafficLights();
         if (lights != null) {
             for (TrafficLight light : lights) {
                 if (Math.abs(light.getPosition() - newPosition) < MIN_OBJECT_SPACING_METERS) {
-                    return false; // Слишком близко к существующему светофору
+                    System.out.println("Слишком близко к светофору " + light.getId() + " на " + light.getPosition());
+                    return false;
                 }
             }
         }
@@ -271,24 +252,33 @@ public class MainFrame extends JFrame {
         if (signs != null) {
             for (RoadSign sign : signs) {
                 if (Math.abs(sign.getPosition() - newPosition) < MIN_OBJECT_SPACING_METERS) {
-                    return false; // Слишком близко к существующему знаку
+                    System.out.println("Слишком близко к знаку " + sign.getId() + " на " + sign.getPosition());
+                    return false;
                 }
             }
         }
-        return true; // Место свободно
+        return true;
     }
 
-
     private void openTrafficLightSettingsDialog(double position) {
-        // Проверка лимита светофоров уже есть в ActionListener кнопки
+        if (simulationEngine.getRoad().getTrafficLights().size() >= 2) {
+            JOptionPane.showMessageDialog(this, "Достигнут лимит светофоров (макс. 2).", "Лимит", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
         JSpinner redDurationSpinner = new JSpinner(new SpinnerNumberModel(30, 20, 100, 1));
         JSpinner greenDurationSpinner = new JSpinner(new SpinnerNumberModel(30, 20, 100, 1));
-        // Можно добавить выбор начального состояния
         JComboBox<TrafficLightState> initialStateComboBox = new JComboBox<>(new TrafficLightState[]{TrafficLightState.RED, TrafficLightState.GREEN});
+
+        JComboBox<String> directionComboBox = null;
+        String[] directionChoices = {"Направление 1 (->)", "Направление 2 (<-)"};
+        if (simulationEngine.getRoad().getNumberOfDirections() == 2) {
+            directionComboBox = new JComboBox<>(directionChoices);
+        }
 
         JPanel panel = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridx = 0; gbc.gridy = 0; gbc.anchor = GridBagConstraints.WEST; gbc.insets = new Insets(2,2,2,2);
+
         panel.add(new JLabel("Длительность красного (с):"), gbc);
         gbc.gridx = 1; panel.add(redDurationSpinner, gbc);
         gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Длительность зеленого (с):"), gbc);
@@ -296,6 +286,10 @@ public class MainFrame extends JFrame {
         gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Начальное состояние:"), gbc);
         gbc.gridx = 1; panel.add(initialStateComboBox, gbc);
 
+        if (directionComboBox != null) {
+            gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Действует на:"), gbc);
+            gbc.gridx = 1; panel.add(directionComboBox, gbc);
+        }
 
         int result = JOptionPane.showConfirmDialog(this, panel,
                 "Настроить светофор на позиции " + String.format("%.1f", position) + "м",
@@ -305,25 +299,59 @@ public class MainFrame extends JFrame {
             double red = ((Number) redDurationSpinner.getValue()).doubleValue();
             double green = ((Number) greenDurationSpinner.getValue()).doubleValue();
             TrafficLightState initialState = (TrafficLightState) initialStateComboBox.getSelectedItem();
+            int targetDirection = 0;
+            if (simulationEngine.getRoad().getNumberOfDirections() == 1) {
+                targetDirection = 0; // Если одно направление, светофор всегда для него
+            } else if (directionComboBox != null && directionComboBox.getSelectedIndex() == 1) {
+                targetDirection = 1;
+            }
             simulationEngine.getRoad().addTrafficLight(
-                    new com.trafficsimulation.model.TrafficLight(position, red, green, initialState)
+                    new TrafficLight(position, red, green, initialState, targetDirection)
             );
-            System.out.println("Добавлен светофор: pos=" + position + ", R=" + red + ", G=" + green + ", Init=" + initialState);
+            System.out.println("Добавлен светофор: pos=" + position + ", R=" + red + ", G=" + green + ", Init=" + initialState + ", Dir=" + targetDirection);
             simulationPanel.updateSimulationState(simulationEngine.getRoad(), simulationEngine.getSimulationTime());
         }
     }
 
     private void openRoadSignSettingsDialog(double position) {
         RoadSignType[] signTypes = RoadSignType.values();
-        RoadSignType selectedType = (RoadSignType) JOptionPane.showInputDialog(
-                this, "Выберите тип знака для позиции " + String.format("%.1f", position) + "м:",
-                "Добавить дорожный знак", JOptionPane.PLAIN_MESSAGE, null, signTypes, signTypes[0]
-        );
-        if (selectedType != null) {
+        JComboBox<RoadSignType> typeComboBox = new JComboBox<>(signTypes);
+
+        JComboBox<String> directionComboBox = null;
+        String[] directionChoices = {"Направление 1 (->)", "Направление 2 (<-)"};
+        if (simulationEngine.getRoad().getNumberOfDirections() == 2) {
+            directionComboBox = new JComboBox<>(directionChoices);
+        }
+
+        JPanel panel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0; gbc.gridy = 0; gbc.anchor = GridBagConstraints.WEST; gbc.insets = new Insets(2,2,2,2);
+
+        panel.add(new JLabel("Тип знака:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; panel.add(typeComboBox, gbc);
+        gbc.fill = GridBagConstraints.NONE;
+
+        if (directionComboBox != null) {
+            gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Действует на:"), gbc);
+            gbc.gridx = 1; panel.add(directionComboBox, gbc);
+        }
+
+        int result = JOptionPane.showConfirmDialog(this, panel,
+                "Добавить дорожный знак на позиции " + String.format("%.1f", position) + "м:",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+
+        if (result == JOptionPane.OK_OPTION) {
+            RoadSignType selectedType = (RoadSignType) typeComboBox.getSelectedItem();
+            int targetDirection = 0;
+            if (simulationEngine.getRoad().getNumberOfDirections() == 1) {
+                targetDirection = 0;
+            } else if (directionComboBox != null && directionComboBox.getSelectedIndex() == 1) {
+                targetDirection = 1;
+            }
             simulationEngine.getRoad().addRoadSign(
-                    new com.trafficsimulation.model.RoadSign(position, selectedType)
+                    new RoadSign(position, selectedType, targetDirection)
             );
-            System.out.println("Добавлен знак: pos=" + position + ", тип=" + selectedType);
+            System.out.println("Добавлен знак: pos=" + position + ", тип=" + selectedType + ", Dir=" + targetDirection);
             simulationPanel.updateSimulationState(simulationEngine.getRoad(), simulationEngine.getSimulationTime());
         }
     }

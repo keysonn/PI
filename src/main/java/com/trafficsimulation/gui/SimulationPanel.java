@@ -8,7 +8,7 @@ import java.awt.RenderingHints;
 import java.awt.FontMetrics;
 
 import com.trafficsimulation.model.*;
-// import com.trafficsimulation.gui.VisualizationMode; // УДАЛЯЕМ ИМПОРТ
+// import com.trafficsimulation.gui.VisualizationMode; // УДАЛЕН ИМПОРТ
 
 public class SimulationPanel extends JPanel {
 
@@ -23,8 +23,9 @@ public class SimulationPanel extends JPanel {
     private Font infoFont;
     private Font placementHintFont;
     private Font trafficLightTimerFont;
+    // private Font carDebugFont; // УДАЛЕНО
 
-    // private VisualizationMode currentVizMode = VisualizationMode.STANDARD; // УДАЛЯЕМ ПОЛЕ
+    // private VisualizationMode currentVizMode = VisualizationMode.STANDARD; // УДАЛЕНО
 
     private boolean isInPlacementMode = false;
     private String placementObjectType = null;
@@ -38,6 +39,7 @@ public class SimulationPanel extends JPanel {
         infoFont = new Font("Arial", Font.PLAIN, 12);
         placementHintFont = new Font("Arial", Font.ITALIC, 12);
         trafficLightTimerFont = new Font("Monospaced", Font.BOLD, 10);
+        // carDebugFont = new Font("Arial", Font.PLAIN, 9); // УДАЛЕНО
 
         addMouseMotionListener(new MouseAdapter() {
             @Override
@@ -76,10 +78,8 @@ public class SimulationPanel extends JPanel {
         repaint();
     }
 
-    // public void setVisualizationMode(VisualizationMode mode) { // УДАЛЯЕМ МЕТОД
-    //    this.currentVizMode = mode;
-    //    this.repaint();
-    // }
+    // public void setVisualizationMode(VisualizationMode mode) { /* УДАЛЕН МЕТОД */ }
+
 
     @Override
     protected void paintComponent(Graphics g) {
@@ -109,6 +109,7 @@ public class SimulationPanel extends JPanel {
     }
 
     private void drawPlacementHint(Graphics2D g2d){
+        if (mousePosition == null) return; // Добавлена проверка
         g2d.setColor(Color.YELLOW);
         g2d.drawLine(mousePosition.x, 0, mousePosition.x, getHeight());
         g2d.setFont(placementHintFont);
@@ -169,7 +170,7 @@ public class SimulationPanel extends JPanel {
             Color carBodyColor;
             Color carCabinColor;
 
-            // Возвращаем стандартную раскраску
+            // Стандартная раскраска
             if (car.getDirection() == 0) {
                 carBodyColor = new Color(0, 150, 255);
                 carCabinColor = new Color(100, 200, 255);
@@ -189,11 +190,11 @@ public class SimulationPanel extends JPanel {
             g2d.setColor(Color.BLACK);
             g2d.drawRoundRect(carRectX, carScreenY, CAR_WIDTH_PX, CAR_HEIGHT_PX, 5, 5);
 
-            g2d.setColor(Color.BLACK); // Цвет текста скорости всегда черный
+            g2d.setColor(Color.BLACK);
             String speedText = String.format("%.0f", car.getCurrentSpeed() * 3.6);
             int textWidth = fmCarSpeed.stringWidth(speedText);
             int textX = carScreenX - textWidth / 2;
-            int textY = carScreenY + fmCarSpeed.getAscent() - 1;
+            int textY = carScreenY + fmCarSpeed.getAscent() - 1; // Позиция текста скорости
             g2d.drawString(speedText, textX, textY);
         }
     }
@@ -206,9 +207,24 @@ public class SimulationPanel extends JPanel {
         for (TrafficLight light : currentRoad.getTrafficLights()) {
             int lightScreenX = (int) ((light.getPosition() / currentRoad.getLength()) * getWidth());
             int lightSize = LANE_HEIGHT_PX / 2 + 2;
-            int lightScreenY = roadY - lightSize - 5;
+
+            // Определяем Y координату в зависимости от направления светофора
+            int lightScreenY;
+            if (light.getTargetDirection() == 0) { // Для движения слева-направо, светофор сверху
+                lightScreenY = roadY - lightSize - 5;
+            } else { // Для движения справа-налево, светофор снизу
+                lightScreenY = roadY + roadPixelHeight + 5;
+            }
+
+            // Рисуем "столбик"
             g2d.setColor(Color.DARK_GRAY.darker());
-            g2d.fillRect(lightScreenX - 2, lightScreenY + lightSize, 4, roadY - (lightScreenY + lightSize));
+            if (light.getTargetDirection() == 0) {
+                g2d.fillRect(lightScreenX - 2, lightScreenY + lightSize, 4, roadY - (lightScreenY + lightSize));
+            } else {
+                g2d.fillRect(lightScreenX - 2, roadY + roadPixelHeight, 4, lightScreenY - (roadY+roadPixelHeight));
+            }
+
+
             switch (light.getCurrentState()) {
                 case RED: g2d.setColor(Color.RED); break;
                 case GREEN: g2d.setColor(Color.GREEN); break;
@@ -217,6 +233,7 @@ public class SimulationPanel extends JPanel {
             g2d.fillOval(lightScreenX - lightSize / 2, lightScreenY, lightSize, lightSize);
             g2d.setColor(Color.BLACK);
             g2d.drawOval(lightScreenX - lightSize / 2, lightScreenY, lightSize, lightSize);
+
             String timeText = String.format("%.0f", light.getRemainingTime());
             g2d.setFont(trafficLightTimerFont);
             FontMetrics fmTimer = g2d.getFontMetrics();
@@ -237,7 +254,16 @@ public class SimulationPanel extends JPanel {
 
         for(RoadSign sign : currentRoad.getRoadSigns()){
             int signX = (int) ( (sign.getPosition() / currentRoad.getLength()) * getWidth() );
-            int signYBase = roadY + roadPixelHeight + 5;
+
+            // Определяем Y координату в зависимости от направления знака
+            int signYBase;
+            if (sign.getTargetDirection() == 0) { // Для движения слева-направо, знак снизу
+                signYBase = roadY + roadPixelHeight + 5;
+            } else { // Для движения справа-налево, знак сверху
+                signYBase = roadY - 20; // 20 - примерная высота знака + отступ
+            }
+
+
             String signText = sign.getType().name().replace("SPEED_LIMIT_", "").replace("_SIGN_GENERIC", "INFO");
             int textWidth = fmSign.stringWidth(signText);
             int textHeightWithDescent = fmSign.getHeight();
@@ -245,11 +271,21 @@ public class SimulationPanel extends JPanel {
             int padding = 4;
             int rectWidth = textWidth + 2 * padding;
             int rectHeight = textHeightWithDescent;
-            int rectY = signYBase - rectHeight - 2;
+
+            int rectY = signYBase - rectHeight -2; // Если знак снизу
+            if (sign.getTargetDirection() == 1) { // Если знак сверху
+                rectY = signYBase;
+            }
             int rectX = signX - rectWidth / 2;
 
+            // Рисуем "столбик" знака
             g2d.setColor(Color.GRAY.darker());
-            g2d.fillRect(signX - 1, rectY + rectHeight, 2, roadY + roadPixelHeight - (rectY + rectHeight) + 5);
+            if (sign.getTargetDirection() == 0) {
+                g2d.fillRect(signX - 1, rectY + rectHeight, 2, (roadY + roadPixelHeight) - (rectY + rectHeight) + 5);
+            } else {
+                g2d.fillRect(signX - 1, rectY + rectHeight, 2, roadY - (rectY + rectHeight) - 5);
+            }
+
 
             if(sign.getType().name().contains("SPEED_LIMIT")){
                 g2d.setColor(Color.WHITE);

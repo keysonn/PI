@@ -42,28 +42,7 @@ public class SimulationEngine implements Runnable {
         );
         this.flowGenerator = new TrafficFlowGenerator(parameters, this.road);
         this.simulationTime = 0.0;
-
-        // --- УДАЛЕН ИЛИ ЗАКОММЕНТИРОВАН БЛОК ДОБАВЛЕНИЯ СВЕТОФОРОВ И ЗНАКОВ ПО УМОЛЧАНИЮ ---
-        /*
-        // Добавляем светофоры
-        if (road.getLength() > 100 && parameters.getRoadType() != RoadType.HIGHWAY) {
-            road.addTrafficLight(new TrafficLight(road.getLength() * 0.3, 30, 30, TrafficLightState.RED));
-            if (road.getLength() > 500 && road.getTrafficLights().size() < 2) {
-                road.addTrafficLight(new TrafficLight(road.getLength() * 0.7, 25, 35, TrafficLightState.GREEN));
-            }
-        }
-        // Добавляем дорожные знаки для теста
-        if (road.getLength() > 200) {
-            road.addRoadSign(new RoadSign(road.getLength() * 0.15, RoadSignType.SPEED_LIMIT_60));
-        }
-        if (road.getLength() > 600) {
-            road.addRoadSign(new RoadSign(road.getLength() * 0.5, RoadSignType.SPEED_LIMIT_30));
-        }
-        if (road.getLength() > 1000) {
-            road.addRoadSign(new RoadSign(road.getLength() * 0.85, RoadSignType.SPEED_LIMIT_90));
-        }
-        */
-        // --- КОНЕЦ УДАЛЕННОГО/ЗАКОММЕНТИРОВАННОГО БЛОКА ---
+        // Светофоры и знаки по умолчанию удалены, добавляются пользователем через GUI
     }
 
     public void startSimulation() {
@@ -167,7 +146,6 @@ public class SimulationEngine implements Runnable {
         List<Car> currentCars = road.getCars();
         if (currentCars != null) {
             final double APPROX_CAR_LENGTH = 5.0;
-
             for (Car car : currentCars) {
                 Car leadCar = findLeadCar(car, currentCars, car.getDirection());
                 double distanceToLeadBumperToBumper;
@@ -178,12 +156,10 @@ public class SimulationEngine implements Runnable {
                 } else {
                     distanceToLeadBumperToBumper = Double.POSITIVE_INFINITY;
                 }
-
                 double effectiveSpeedLimit = findEffectiveSpeedLimit(car, car.getDirection());
                 TrafficLight nextLight = findNextTrafficLight(car, car.getDirection());
                 double distanceToLightAbs = (nextLight != null) ? Math.abs(nextLight.getPosition() - car.getPosition()) : Double.POSITIVE_INFINITY;
                 TrafficLightState nextLightState = (nextLight != null) ? nextLight.getCurrentState() : null;
-
                 car.update(deltaTime, leadCar, distanceToLeadBumperToBumper, effectiveSpeedLimit, nextLightState, distanceToLightAbs);
             }
         }
@@ -193,13 +169,13 @@ public class SimulationEngine implements Runnable {
         }
     }
 
-    private Car findLeadCar(Car currentCar, List<Car> allCars, int direction) {
+    private Car findLeadCar(Car currentCar, List<Car> allCars, int carDirection) {
         if (allCars == null) return null;
         Car leader = null;
         double minDistance = Double.POSITIVE_INFINITY;
         for (Car otherCar : allCars) {
-            if (otherCar.getId() == currentCar.getId() || otherCar.getLaneIndex() != currentCar.getLaneIndex() || otherCar.getDirection() != direction) continue;
-            double distance = (direction == 0) ? (otherCar.getPosition() - currentCar.getPosition()) : (currentCar.getPosition() - otherCar.getPosition());
+            if (otherCar.getId() == currentCar.getId() || otherCar.getLaneIndex() != currentCar.getLaneIndex() || otherCar.getDirection() != carDirection) continue;
+            double distance = (carDirection == 0) ? (otherCar.getPosition() - currentCar.getPosition()) : (currentCar.getPosition() - otherCar.getPosition());
             if (distance > 0 && distance < minDistance) {
                 minDistance = distance;
                 leader = otherCar;
@@ -208,43 +184,75 @@ public class SimulationEngine implements Runnable {
         return leader;
     }
 
-    private double findEffectiveSpeedLimit(Car car, int direction) {
+    private double findEffectiveSpeedLimit(Car car, int carDirection) {
         List<RoadSign> signs = road.getRoadSigns();
         double carMaxSpeed = car.getMaxSpeed();
-        if (signs == null || signs.isEmpty()) return carMaxSpeed;
+        if (signs == null || signs.isEmpty()) {
+            return carMaxSpeed;
+        }
 
         double activeLimit = carMaxSpeed;
-        if (direction == 0) {
+
+        if (carDirection == 0) { // Машина едет слева направо (позиция растет)
+            // Ищем последний знак, позиция которого <= позиции машины и который для этого направления
             for (RoadSign sign : signs) {
-                double limitFromSign = sign.getSpeedLimitValue();
-                if (limitFromSign < 0) continue;
+                if (sign.getTargetDirection() != 0 && sign.getTargetDirection() != -1) continue; // -1 для общих знаков (пока не используем)
+
                 if (sign.getPosition() <= car.getPosition()) {
-                    activeLimit = limitFromSign;
+                    double limitFromSign = sign.getSpeedLimitValue();
+                    if (limitFromSign >= 0) {
+                        activeLimit = limitFromSign;
+                    }
                 } else {
+                    // Так как знаки отсортированы, все последующие будут еще дальше впереди
                     break;
                 }
             }
-        } else {
-            for (int i = 0; i < signs.size(); i++) {
-                RoadSign sign = signs.get(i);
-                double limitFromSign = sign.getSpeedLimitValue();
-                if (limitFromSign < 0) continue;
+        } else { // Машина едет справа налево (carDirection == 1, позиция убывает)
+            // Ищем первый знак (т.к. они отсортированы по возрастанию позиции),
+            // позиция которого >= позиции машины и который для этого направления.
+            // Этот знак и будет текущим действующим ограничением.
+            activeLimit = carMaxSpeed; // По умолчанию, если не найдем знаков справа/на позиции
+            for (RoadSign sign : signs) {
+                if (sign.getTargetDirection() != 1 && sign.getTargetDirection() != -1) continue;
+
                 if (sign.getPosition() >= car.getPosition()) {
-                    activeLimit = limitFromSign;
-                    break;
+                    double limitFromSign = sign.getSpeedLimitValue();
+                    if (limitFromSign >= 0) {
+                        activeLimit = limitFromSign;
+                        break; // Нашли первый подходящий знак справа (или на позиции), он и действует
+                    }
                 }
+                // Если мы прошли все знаки, и ни один не был >= car.position,
+                // значит, все знаки слева от машины (по ходу движения машины - они уже позади).
+                // В этом случае должен действовать последний проехавший знак.
+                // Для этого нужно было бы запоминать *последний* знак, который был sign.position < car.position.
+                // Но для упрощенной модели: если справа нет знаков, действует carMaxSpeed.
             }
         }
         return Math.min(activeLimit, carMaxSpeed);
     }
 
-    private TrafficLight findNextTrafficLight(Car car, int direction) {
+    private TrafficLight findNextTrafficLight(Car car, int carDirection) {
         List<TrafficLight> lights = road.getTrafficLights();
         if (lights == null) return null;
         TrafficLight nextFoundLight = null;
         double minDistance = Double.POSITIVE_INFINITY;
+
         for (TrafficLight light : lights) {
-            double distance = (direction == 0) ? (light.getPosition() - car.getPosition()) : (car.getPosition() - light.getPosition());
+            // Проверяем, что светофор для нужного направления
+            // (можно добавить поддержку "общего" светофора с targetDirection = -1)
+            if (light.getTargetDirection() != carDirection && light.getTargetDirection() != -1) {
+                continue;
+            }
+
+            double distance;
+            if (carDirection == 0) { // Слева направо
+                distance = light.getPosition() - car.getPosition();
+            } else { // Справа налево
+                distance = car.getPosition() - light.getPosition();
+            }
+
             if (distance > 0 && distance < minDistance) {
                 minDistance = distance;
                 nextFoundLight = light;
