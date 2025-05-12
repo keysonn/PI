@@ -43,12 +43,16 @@ public class SimulationEngine implements Runnable {
         this.flowGenerator = new TrafficFlowGenerator(parameters, this.road);
         this.simulationTime = 0.0;
 
+        // --- УДАЛЕН ИЛИ ЗАКОММЕНТИРОВАН БЛОК ДОБАВЛЕНИЯ СВЕТОФОРОВ И ЗНАКОВ ПО УМОЛЧАНИЮ ---
+        /*
+        // Добавляем светофоры
         if (road.getLength() > 100 && parameters.getRoadType() != RoadType.HIGHWAY) {
             road.addTrafficLight(new TrafficLight(road.getLength() * 0.3, 30, 30, TrafficLightState.RED));
             if (road.getLength() > 500 && road.getTrafficLights().size() < 2) {
                 road.addTrafficLight(new TrafficLight(road.getLength() * 0.7, 25, 35, TrafficLightState.GREEN));
             }
         }
+        // Добавляем дорожные знаки для теста
         if (road.getLength() > 200) {
             road.addRoadSign(new RoadSign(road.getLength() * 0.15, RoadSignType.SPEED_LIMIT_60));
         }
@@ -58,6 +62,8 @@ public class SimulationEngine implements Runnable {
         if (road.getLength() > 1000) {
             road.addRoadSign(new RoadSign(road.getLength() * 0.85, RoadSignType.SPEED_LIMIT_90));
         }
+        */
+        // --- КОНЕЦ УДАЛЕННОГО/ЗАКОММЕНТИРОВАННОГО БЛОКА ---
     }
 
     public void startSimulation() {
@@ -130,7 +136,7 @@ public class SimulationEngine implements Runnable {
                 if (sleepTime > 0) {
                     Thread.sleep(sleepTime);
                 } else {
-                    Thread.yield(); // Или Thread.sleep(1)
+                    Thread.yield();
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -160,14 +166,25 @@ public class SimulationEngine implements Runnable {
 
         List<Car> currentCars = road.getCars();
         if (currentCars != null) {
+            final double APPROX_CAR_LENGTH = 5.0;
+
             for (Car car : currentCars) {
                 Car leadCar = findLeadCar(car, currentCars, car.getDirection());
-                double distanceToLeadAbs = (leadCar != null) ? Math.abs(leadCar.getPosition() - car.getPosition()) - 10 : Double.POSITIVE_INFINITY;
+                double distanceToLeadBumperToBumper;
+                if (leadCar != null) {
+                    double distBetweenFronts = Math.abs(leadCar.getPosition() - car.getPosition());
+                    distanceToLeadBumperToBumper = distBetweenFronts - APPROX_CAR_LENGTH;
+                    distanceToLeadBumperToBumper = Math.max(0.1, distanceToLeadBumperToBumper);
+                } else {
+                    distanceToLeadBumperToBumper = Double.POSITIVE_INFINITY;
+                }
+
                 double effectiveSpeedLimit = findEffectiveSpeedLimit(car, car.getDirection());
                 TrafficLight nextLight = findNextTrafficLight(car, car.getDirection());
                 double distanceToLightAbs = (nextLight != null) ? Math.abs(nextLight.getPosition() - car.getPosition()) : Double.POSITIVE_INFINITY;
                 TrafficLightState nextLightState = (nextLight != null) ? nextLight.getCurrentState() : null;
-                car.update(deltaTime, leadCar, distanceToLeadAbs, effectiveSpeedLimit, nextLightState, distanceToLightAbs);
+
+                car.update(deltaTime, leadCar, distanceToLeadBumperToBumper, effectiveSpeedLimit, nextLightState, distanceToLightAbs);
             }
         }
 
@@ -197,26 +214,28 @@ public class SimulationEngine implements Runnable {
         if (signs == null || signs.isEmpty()) return carMaxSpeed;
 
         double activeLimit = carMaxSpeed;
-        for (RoadSign sign : signs) {
-            double limitFromSign = sign.getSpeedLimitValue();
-            if (limitFromSign < 0) continue; // Не знак ограничения
-
-            if (direction == 0) { // Слева направо
-                if (sign.getPosition() <= car.getPosition()) activeLimit = limitFromSign;
-                else break; // Знаки отсортированы, остальные дальше
-            } else { // Справа налево
-                if (sign.getPosition() >= car.getPosition()) activeLimit = limitFromSign;
-                // Для dir=1, мы ищем последний знак, который >= car.pos.
-                // Так как знаки отсортированы по возрастанию, мы просто продолжаем обновлять.
-                // Более точная логика потребовала бы обратного прохода или поиска первого знака >= car.pos.
-                // Но для простой реализации, если знаков не много, текущая логика для dir=1 найдет
-                // самый ПРАВЫЙ (с наибольшей координатой) знак, который >= car.pos.
-                // Это не совсем то, что "последний проехавший".
-                // Правильнее было бы найти *все* знаки >= car.pos и взять из них тот, у которого *минимальная* позиция.
-                // Но оставим пока так для упрощения, т.к. основная проблема сейчас - компиляция.
+        if (direction == 0) {
+            for (RoadSign sign : signs) {
+                double limitFromSign = sign.getSpeedLimitValue();
+                if (limitFromSign < 0) continue;
+                if (sign.getPosition() <= car.getPosition()) {
+                    activeLimit = limitFromSign;
+                } else {
+                    break;
+                }
+            }
+        } else {
+            for (int i = 0; i < signs.size(); i++) {
+                RoadSign sign = signs.get(i);
+                double limitFromSign = sign.getSpeedLimitValue();
+                if (limitFromSign < 0) continue;
+                if (sign.getPosition() >= car.getPosition()) {
+                    activeLimit = limitFromSign;
+                    break;
+                }
             }
         }
-        return Math.min(activeLimit, carMaxSpeed); // Не превышать собственную максималку
+        return Math.min(activeLimit, carMaxSpeed);
     }
 
     private TrafficLight findNextTrafficLight(Car car, int direction) {

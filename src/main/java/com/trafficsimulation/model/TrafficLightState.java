@@ -5,6 +5,5 @@ package com.trafficsimulation.model;
  */
 public enum TrafficLightState {
     RED,
-    YELLOW, // Используем для цикла переключения, хотя в ТЗ реакции только на R/G
     GREEN
 }
