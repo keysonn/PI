@@ -1,6 +1,5 @@
 package com.trafficsimulation.gui;
 
-import com.trafficsimulation.model.RoadType;
 import com.trafficsimulation.simulation.DistributionLaw;
 import com.trafficsimulation.simulation.SimulationParameters;
 
@@ -9,24 +8,10 @@ import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.awt.event.ActionListener;
 
-public class SettingsDialog extends JDialog {
+public class ModelingSettingsDialog extends JDialog {
 
     private SimulationParameters params;
     private boolean settingsSaved = false;
-
-    private JTabbedPane tabbedPane; // Поле для вкладок
-
-    // Дорога
-    private JComboBox<RoadType> roadTypeComboBox;
-    private JSpinner roadLengthSpinner;
-    private JToggleButton dirOneWayButton, dirTwoWayButton;
-    private ButtonGroup directionGroup;
-    private JSlider lanesSlider;
-
-    // Тоннель
-    private JPanel commonRoadSettingsPanelContainer;
-    private JPanel tunnelSettingsPanel;
-    private JSpinner tunnelRedLightSpinner, tunnelGreenLightSpinner;
 
     // Скоростной режим
     private JToggleButton speedDeterministicRadio, speedRandomRadio;
@@ -52,78 +37,56 @@ public class SettingsDialog extends JDialog {
     private JSpinner timeNormalMeanSpinner, timeNormalVarianceSpinner;
     private JSpinner timeExponentialIntensitySpinner;
 
-
-    public SettingsDialog(Frame owner, SimulationParameters currentParams) {
-        super(owner, "Настройки", true);
+    public ModelingSettingsDialog(Frame owner, SimulationParameters currentParams) {
+        super(owner, "Настройки параметров моделирования", true);
         this.params = currentParams;
 
         initComponents();
-        layoutMainDialog(); // Здесь this.tabbedPane будет инициализирован
+        layoutComponents();
         addListeners();
         loadParameters();
 
-        // Вызываем методы обновления видимости после того, как все компоненты загружены и слушатели добавлены
-        updateRoadSettingsVisibility();
-        updateSpeedSettingsVisibility(); // Это вызовет updateSpeedLawPanelsVisibility, если нужно
-        updateTimeSettingsVisibility();  // Это вызовет updateTimeLawPanelsVisibility, если нужно
+        updateSpeedSettingsVisibility();
+        updateTimeSettingsVisibility();
 
         pack();
-        setMinimumSize(new Dimension(Math.max(680, getPreferredSize().width), getPreferredSize().height));
+        setMinimumSize(new Dimension(Math.max(650, getPreferredSize().width), getPreferredSize().height));
         setLocationRelativeTo(owner);
     }
 
-    public void setActiveTab(String tabName) {
-        if (this.tabbedPane != null && tabName != null) {
-            for (int i = 0; i < this.tabbedPane.getTabCount(); i++) {
-                if (this.tabbedPane.getTitleAt(i).equalsIgnoreCase(tabName.trim())) {
-                    this.tabbedPane.setSelectedIndex(i);
-                    break;
-                }
-            }
-        }
-    }
-
     private void initComponents() {
-        // Дорога
-        roadTypeComboBox = new JComboBox<>(new RoadType[]{RoadType.CITY_ROAD, RoadType.HIGHWAY, RoadType.TUNNEL});
-        roadLengthSpinner = new JSpinner(new SpinnerNumberModel(5.0, 1.0, 50.0, 0.5));
-        dirOneWayButton = new JToggleButton("Одностороннее", true);
-        dirTwoWayButton = new JToggleButton("Двустороннее");
-        directionGroup = new ButtonGroup();
-        directionGroup.add(dirOneWayButton); directionGroup.add(dirTwoWayButton);
-        lanesSlider = new JSlider(JSlider.HORIZONTAL, 1, 4, 2);
-        lanesSlider.setMajorTickSpacing(1); lanesSlider.setPaintTicks(true);
-        lanesSlider.setPaintLabels(true); lanesSlider.setSnapToTicks(true);
-        // Тоннель
-        tunnelRedLightSpinner = new JSpinner(new SpinnerNumberModel(30, 20, 100, 1));
-        tunnelGreenLightSpinner = new JSpinner(new SpinnerNumberModel(30, 20, 100, 1));
         // Скоростной режим
         speedDeterministicRadio = new JToggleButton("Детерминированный");
         speedRandomRadio = new JToggleButton("Случайный");
         speedFlowTypeGroup = new ButtonGroup();
         speedFlowTypeGroup.add(speedDeterministicRadio); speedFlowTypeGroup.add(speedRandomRadio);
         speedDetValueSpinner = new JSpinner(new SpinnerNumberModel(60.0, 20.0, 130.0, 5.0));
+
         speedLawUniform = new JToggleButton("Равномерный");
         speedLawNormal = new JToggleButton("Нормальный");
         speedLawExponential = new JToggleButton("Показательный");
         speedLawGroup = new ButtonGroup();
         speedLawGroup.add(speedLawUniform); speedLawGroup.add(speedLawNormal); speedLawGroup.add(speedLawExponential);
+
         speedUniformMinSpinner = new JSpinner(new SpinnerNumberModel(40.0, 20.0, 130.0, 1.0));
         speedUniformMaxSpinner = new JSpinner(new SpinnerNumberModel(80.0, 20.0, 130.0, 1.0));
         speedNormalMeanSpinner = new JSpinner(new SpinnerNumberModel(60.0, 20.0, 130.0, 1.0));
         speedNormalVarianceSpinner = new JSpinner(new SpinnerNumberModel(10.0, 0.0, 40.0, 1.0));
         speedExponentialIntensitySpinner = new JSpinner(new SpinnerNumberModel(1.0, 0.01, 10.0, 0.01));
+
         // Настройка времени
         timeDeterministicRadio = new JToggleButton("Детерминированный");
         timeRandomRadio = new JToggleButton("Случайный");
         timeFlowTypeGroup = new ButtonGroup();
         timeFlowTypeGroup.add(timeDeterministicRadio); timeFlowTypeGroup.add(timeRandomRadio);
         timeDetValueSpinner = new JSpinner(new SpinnerNumberModel(10.0, 10.0, 15.0, 0.5));
+
         timeLawUniform = new JToggleButton("Равномерный");
         timeLawNormal = new JToggleButton("Нормальный");
         timeLawExponential = new JToggleButton("Показательный");
         timeLawGroup = new ButtonGroup();
         timeLawGroup.add(timeLawUniform); timeLawGroup.add(timeLawNormal); timeLawGroup.add(timeLawExponential);
+
         timeUniformMinSpinner = new JSpinner(new SpinnerNumberModel(10.0, 10.0, 15.0, 0.1));
         timeUniformMaxSpinner = new JSpinner(new SpinnerNumberModel(15.0, 10.0, 15.0, 0.1));
         timeNormalMeanSpinner = new JSpinner(new SpinnerNumberModel(20.0, 20.0, 120.0, 1.0));
@@ -152,68 +115,21 @@ public class SettingsDialog extends JDialog {
         return panel;
     }
 
-    private void layoutMainDialog() {
-        setLayout(new BorderLayout(10, 10));
-        this.tabbedPane = new JTabbedPane();
+    private void layoutComponents() {
+        setLayout(new BorderLayout(10,10));
+        JPanel mainPanel = new JPanel(new GridLayout(1, 2, 10, 0)); // 1 ряд, 2 колонки
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
 
-        JPanel roadSettingsTabPanel = new JPanel();
-        roadSettingsTabPanel.setLayout(new BoxLayout(roadSettingsTabPanel, BoxLayout.Y_AXIS));
-        roadSettingsTabPanel.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
-        JPanel roadTypePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        roadTypePanel.add(new JLabel("Выберите тип автодороги:"));
-        roadTypePanel.add(roadTypeComboBox);
-        roadSettingsTabPanel.add(roadTypePanel);
-        commonRoadSettingsPanelContainer = createCommonRoadSettingsPanel();
-        roadSettingsTabPanel.add(commonRoadSettingsPanelContainer);
-        tunnelSettingsPanel = createTunnelSettingsPanel();
-        roadSettingsTabPanel.add(tunnelSettingsPanel);
-        this.tabbedPane.addTab("Параметры автодороги", roadSettingsTabPanel);
+        mainPanel.add(createSpeedSettingsMainPanel());
+        mainPanel.add(createTimeSettingsMainPanel());
 
-        JPanel modelingSettingsTabPanel = new JPanel(new GridLayout(1, 2, 10, 0));
-        modelingSettingsTabPanel.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
-        modelingSettingsTabPanel.add(createSpeedSettingsMainPanel());
-        modelingSettingsTabPanel.add(createTimeSettingsMainPanel());
-        this.tabbedPane.addTab("Параметры моделирования", modelingSettingsTabPanel);
-
-        add(this.tabbedPane, BorderLayout.CENTER);
+        add(mainPanel, BorderLayout.CENTER);
 
         JButton saveButton = new JButton("Сохранить настройки");
         saveButton.addActionListener(e -> saveAndClose());
         JPanel buttonPanelSouth = new JPanel(new FlowLayout(FlowLayout.CENTER));
         buttonPanelSouth.add(saveButton);
         add(buttonPanelSouth, BorderLayout.SOUTH);
-    }
-
-    private JPanel createCommonRoadSettingsPanel() {
-        JPanel panel = new JPanel(new GridBagLayout());
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5,5,5,5); gbc.anchor = GridBagConstraints.WEST;
-        gbc.gridy = 0; gbc.gridx = 0; panel.add(new JLabel("Направление движения:"), gbc);
-        JPanel dirPanel = new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));
-        dirPanel.add(dirOneWayButton); dirPanel.add(dirTwoWayButton);
-        gbc.gridx = 1; panel.add(dirPanel, gbc);
-        gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Количество полос (в 1 напр.):"), gbc);
-        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; panel.add(lanesSlider, gbc);
-        gbc.fill = GridBagConstraints.NONE;
-        gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Длина участка автодороги:"), gbc);
-        JPanel lengthPanel = new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));
-        lengthPanel.add(roadLengthSpinner); lengthPanel.add(new JLabel(" км"));
-        gbc.gridx = 1; panel.add(lengthPanel, gbc);
-        return panel;
-    }
-    private JPanel createTunnelSettingsPanel(){
-        JPanel panel = new JPanel(new GridBagLayout());
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5,5,5,5); gbc.anchor = GridBagConstraints.WEST;
-        gbc.gridy = 0; gbc.gridx = 0; panel.add(new JLabel("Длина красного света:"), gbc);
-        JPanel redPanel = new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));
-        redPanel.add(tunnelRedLightSpinner); redPanel.add(new JLabel(" секунд"));
-        gbc.gridx = 1; panel.add(redPanel, gbc);
-        gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Длина зеленого света:"), gbc);
-        JPanel greenPanel = new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));
-        greenPanel.add(tunnelGreenLightSpinner); greenPanel.add(new JLabel(" секунд"));
-        gbc.gridx = 1; panel.add(greenPanel, gbc);
-        return panel;
     }
 
     private JPanel createSpeedSettingsMainPanel() {
@@ -263,7 +179,6 @@ public class SettingsDialog extends JDialog {
     }
 
     private void addListeners() {
-        roadTypeComboBox.addActionListener(e -> updateRoadSettingsVisibility());
         ActionListener speedFlowTypeListener = e -> updateSpeedSettingsVisibility();
         speedDeterministicRadio.addActionListener(speedFlowTypeListener);
         speedRandomRadio.addActionListener(speedFlowTypeListener);
@@ -271,6 +186,7 @@ public class SettingsDialog extends JDialog {
         speedLawUniform.addActionListener(speedLawListener);
         speedLawNormal.addActionListener(speedLawListener);
         speedLawExponential.addActionListener(speedLawListener);
+
         ActionListener timeFlowTypeListener = e -> updateTimeSettingsVisibility();
         timeDeterministicRadio.addActionListener(timeFlowTypeListener);
         timeRandomRadio.addActionListener(timeFlowTypeListener);
@@ -278,14 +194,6 @@ public class SettingsDialog extends JDialog {
         timeLawUniform.addActionListener(timeLawListener);
         timeLawNormal.addActionListener(timeLawListener);
         timeLawExponential.addActionListener(timeLawListener);
-    }
-
-    private void updateRoadSettingsVisibility() {
-        RoadType selectedType = (RoadType) roadTypeComboBox.getSelectedItem();
-        boolean isTunnel = (selectedType == RoadType.TUNNEL);
-        if (commonRoadSettingsPanelContainer != null) commonRoadSettingsPanelContainer.setVisible(!isTunnel);
-        if (tunnelSettingsPanel != null) tunnelSettingsPanel.setVisible(isTunnel);
-        SwingUtilities.invokeLater(() -> { if (isVisible()) pack(); });
     }
 
     private void updateSpeedSettingsVisibility() {
@@ -318,13 +226,6 @@ public class SettingsDialog extends JDialog {
     }
 
     private void loadParameters() {
-        // Дорога
-        roadTypeComboBox.setSelectedItem(params.getRoadType());
-        roadLengthSpinner.setValue(params.getRoadLengthKm());
-        if (params.getNumberOfDirections() == 1) dirOneWayButton.setSelected(true);
-        else dirTwoWayButton.setSelected(true);
-        lanesSlider.setValue(params.getLanesPerDirection());
-
         // Скорость
         speedDeterministicRadio.setSelected(!params.isRandomSpeedFlow());
         speedRandomRadio.setSelected(params.isRandomSpeedFlow());
@@ -333,7 +234,7 @@ public class SettingsDialog extends JDialog {
         if (speedLaw == DistributionLaw.UNIFORM) speedLawUniform.setSelected(true);
         else if (speedLaw == DistributionLaw.NORMAL) speedLawNormal.setSelected(true);
         else if (speedLaw == DistributionLaw.EXPONENTIAL) speedLawExponential.setSelected(true);
-        else speedLawNormal.setSelected(true); // Дефолтное значение, если параметр не был установлен
+        else speedLawNormal.setSelected(true); // Дефолтное значение
         speedUniformMinSpinner.setValue(params.getSpeedUniformMinKmh());
         speedUniformMaxSpinner.setValue(params.getSpeedUniformMaxKmh());
         speedNormalMeanSpinner.setValue(params.getSpeedNormalMeanKmh());
@@ -357,14 +258,6 @@ public class SettingsDialog extends JDialog {
     }
 
     private void saveAndClose() {
-        // Дорога
-        params.setRoadType((RoadType) roadTypeComboBox.getSelectedItem());
-        params.setRoadLengthKm(((Number) roadLengthSpinner.getValue()).doubleValue());
-        params.setNumberOfDirections(dirOneWayButton.isSelected() ? 1 : 2);
-        params.setLanesPerDirection(lanesSlider.getValue());
-        // TODO: Сохранять параметры светофоров для тоннеля (tunnelRedLightSpinner, tunnelGreenLightSpinner),
-        // если params.getRoadType() == RoadType.TUNNEL. Потребуются соответствующие поля и сеттеры в SimulationParameters.
-
         // Скорость
         params.setRandomSpeedFlow(speedRandomRadio.isSelected());
         if (params.isRandomSpeedFlow()){
@@ -400,6 +293,9 @@ public class SettingsDialog extends JDialog {
     }
 
     public boolean showDialog() {
+        // Перед показом убедимся, что панели видимы корректно
+        updateSpeedSettingsVisibility();
+        updateTimeSettingsVisibility();
         setVisible(true);
         return settingsSaved;
     }

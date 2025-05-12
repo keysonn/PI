@@ -10,18 +10,27 @@ public class TrafficLight {
     private final double greenDuration;
     private TrafficLightState currentState;
     private double timeInCurrentState;
-    private final int targetDirection; // 0 для направления 0, 1 для направления 1
+    private final int targetDirection; // 0 для направления 0 (слева-направо), 1 для направления 1 (справа-налево)
 
-    public TrafficLight(double position, double redDuration, double greenDuration, int targetDirection) {
+    // Конструктор с initialState и targetDirection
+    public TrafficLight(double position, double redDuration, double greenDuration,
+                        TrafficLightState initialState, int targetDirection) {
         this.id = idCounter++;
         this.position = position;
-        this.redDuration = Math.max(20.0, Math.min(redDuration, 100.0));
-        this.greenDuration = Math.max(20.0, Math.min(greenDuration, 100.0));
-        this.currentState = TrafficLightState.GREEN; // По умолчанию зеленый
+        this.redDuration = Math.max(20.0, Math.min(redDuration, 100.0)); // ТЗ 1.6-1.7
+        this.greenDuration = Math.max(20.0, Math.min(greenDuration, 100.0)); // ТЗ 1.8-1.9
+
+        // Убедимся, что initialState не null и корректен (RED или GREEN)
+        if (initialState == null || (initialState != TrafficLightState.RED && initialState != TrafficLightState.GREEN) ) {
+            this.currentState = TrafficLightState.RED; // Безопасное значение по умолчанию
+        } else {
+            this.currentState = initialState;
+        }
+
         this.targetDirection = targetDirection;
         this.timeInCurrentState = 0.0;
         System.out.println("Создан TrafficLight ID=" + this.id + " на поз. " + String.format("%.1f",this.position) +
-                " для напр. " + this.targetDirection + " с сост. " + this.currentState);
+                " для напр. " + this.targetDirection + " с нач. сост. " + this.currentState);
     }
 
     public void update(double deltaTime) {
@@ -34,11 +43,12 @@ public class TrafficLight {
                 }
                 break;
             case RED:
-                if (timeInCurrentState >= greenDuration) { // Ошибка была здесь, должно быть redDuration
+                if (timeInCurrentState >= redDuration) { // Исправлено с greenDuration на redDuration
                     currentState = TrafficLightState.GREEN;
                     timeInCurrentState = 0;
                 }
                 break;
+            // YELLOW удален
         }
     }
 
