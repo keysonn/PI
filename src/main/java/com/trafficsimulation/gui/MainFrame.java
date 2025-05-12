@@ -115,6 +115,7 @@ public class MainFrame extends JFrame {
                     pauseButton.setText("Пауза");
                     stopButton.setEnabled(false);
 
+                    // simulationEngine.updateParameters(simulationParameters); // Не обязательно, т.к. работаем с той же ссылкой
                     simulationEngine.initializeSimulation();
                     simulationPanel.updateSimulationState(simulationEngine.getRoad(), 0);
                     System.out.println("Симуляция переинициализирована с новыми параметрами.");

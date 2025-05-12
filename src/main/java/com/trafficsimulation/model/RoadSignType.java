@@ -1,14 +1,8 @@
-package com.trafficsimulation.model;
+package com.trafficsimulation.model; // Или ваш пакет
 
-/**
- * Типы дорожных знаков.
- * (ТЗ, Приложение, п. 1.5 - 4 типа)
- * Конкретизируйте их позже, пока зададим общие.
- */
 public enum RoadSignType {
-    SPEED_LIMIT_30,  // Ограничение 30 км/ч
-    SPEED_LIMIT_60,  // Ограничение 60 км/ч
-    SPEED_LIMIT_90,  // Ограничение 90 км/ч
-    // Четвертый тип, например, знак "Автомагистраль" или "Конец ограничения"
-    INFO_SIGN_GENERIC // Общий информационный знак или конец ограничения
+    SPEED_LIMIT_30,
+    SPEED_LIMIT_60,
+    SPEED_LIMIT_90,
+    INFO_SIGN_GENERIC // Или другие ваши типы
 }
