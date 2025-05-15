@@ -4,7 +4,7 @@ import com.trafficsimulation.gui.SimulationPanel;
 import com.trafficsimulation.model.Car;
 import com.trafficsimulation.model.Road;
 import com.trafficsimulation.model.RoadSign;
-import com.trafficsimulation.model.RoadSignType;
+// import com.trafficsimulation.model.RoadSignType; // Не используется напрямую здесь
 import com.trafficsimulation.model.RoadType;
 import com.trafficsimulation.model.TrafficLight;
 import com.trafficsimulation.model.TrafficLightState;
@@ -32,16 +32,18 @@ public class SimulationEngine implements Runnable {
     private boolean isTunnelActive = false;
 
     private static final boolean ENGINE_DEBUG_LOGGING = true;
+    private static final int CAR_RENDER_WIDTH = 30; // Для логики удаления машин
+
 
     public SimulationEngine(SimulationParameters params, SimulationPanel panel) {
         this.parameters = params;
         this.simulationPanel = panel;
-        initializeSimulation();
-        if (ENGINE_DEBUG_LOGGING) System.out.println("SimulationEngine: Конструктор выполнен, initialisation() вызвана.");
+        initializeSimulation(); // Инициализация происходит здесь
+        if (ENGINE_DEBUG_LOGGING) System.out.println("SimulationEngine: Конструктор выполнен, initializeSimulation() вызвана.");
     }
 
     public void initializeSimulation() {
-        if (ENGINE_DEBUG_LOGGING) System.out.println("SimulationEngine: Начало initializeSimulation(). Параметры: " + parameters);
+        if (ENGINE_DEBUG_LOGGING) System.out.println("SimulationEngine: Начало initializeSimulation(). Параметры: " + parameters.getRoadType());
         isTunnelActive = (parameters.getRoadType() == RoadType.TUNNEL);
 
         if (isTunnelActive) {
@@ -50,8 +52,9 @@ public class SimulationEngine implements Runnable {
             parameters.setLanesPerDirection(1);
         }
 
+        // Длина дороги берется из parameters, который теперь всегда возвращает FIXED_ROAD_LENGTH_KM
         this.road = new Road(
-                parameters.getRoadLengthKm(),
+                parameters.getRoadLengthKm(), // Здесь будет 2.0
                 parameters.getRoadType(),
                 parameters.getLanesPerDirection(),
                 parameters.getNumberOfDirections()
@@ -61,21 +64,49 @@ public class SimulationEngine implements Runnable {
         this.tunnelLightDir0 = null;
         this.tunnelLightDir1 = null;
 
+        if (this.road != null && this.road.getTrafficLights() != null && !this.road.getTrafficLights().isEmpty()) {
+            if (isTunnelActive) {
+                this.road.clearTrafficLights();
+            }
+        }
+
         if (isTunnelActive) {
             if (ENGINE_DEBUG_LOGGING) System.out.println("SimulationEngine: Создание светофоров для тоннеля.");
-            tunnelLightDir0 = new TrafficLight(0.0, parameters.getTunnelDefaultRedDuration(), parameters.getTunnelDefaultGreenDuration(), TrafficLightState.GREEN, 0);
+            double roadModelLength = this.road.getLength();
+            double leftLightPosition = roadModelLength * 0.25;
+            double rightLightPosition = roadModelLength * 0.75;
+
+            tunnelLightDir0 = new TrafficLight(
+                    leftLightPosition,
+                    parameters.getTunnelDefaultRedDuration(),
+                    parameters.getTunnelDefaultGreenDuration(),
+                    TrafficLightState.GREEN, 0);
             tunnelLightDir0.setExternallyControlled(true);
             this.road.addTrafficLight(tunnelLightDir0);
 
-            tunnelLightDir1 = new TrafficLight(this.road.getLength(), parameters.getTunnelDefaultRedDuration(), parameters.getTunnelDefaultGreenDuration(), TrafficLightState.RED, 1);
+            tunnelLightDir1 = new TrafficLight(
+                    rightLightPosition,
+                    parameters.getTunnelDefaultRedDuration(),
+                    parameters.getTunnelDefaultGreenDuration(),
+                    TrafficLightState.RED, 1);
             tunnelLightDir1.setExternallyControlled(true);
             this.road.addTrafficLight(tunnelLightDir1);
 
             tunnelControlState = TunnelControlState.DIR0_GREEN;
             tunnelPhaseTimer = parameters.getTunnelDefaultGreenDuration();
-            if (ENGINE_DEBUG_LOGGING) System.out.println("SimulationEngine: Тоннель активирован. Начальное состояние: " + tunnelControlState + ", таймер фазы: " + String.format("%.2f", tunnelPhaseTimer) + "с");
+
+            if (ENGINE_DEBUG_LOGGING) {
+                System.out.println("SimulationEngine: Тоннель активирован.");
+                System.out.println("  Длина дороги (модель): " + String.format("%.1f", roadModelLength) + "м");
+                System.out.println("  Левый светофор (Dir0) на позиции: " + String.format("%.1f", leftLightPosition) + "м (ID: " + tunnelLightDir0.getId() + ")");
+                System.out.println("  Правый светофор (Dir1) на позиции: " + String.format("%.1f", rightLightPosition) + "м (ID: " + tunnelLightDir1.getId() + ")");
+                System.out.println("  Начальное состояние контроллера: " + tunnelControlState + ", таймер фазы: " + String.format("%.2f", tunnelPhaseTimer) + "с");
+            }
         }
         if (ENGINE_DEBUG_LOGGING) System.out.println("SimulationEngine: Конец initializeSimulation(). Дорога создана: " + this.road);
+        if (simulationPanel != null) {
+            simulationPanel.updateSimulationState(this.road, this.simulationTime);
+        }
     }
 
     private void updateTunnelLogic(double deltaTime) {
@@ -83,8 +114,11 @@ public class SimulationEngine implements Runnable {
             return;
         }
         tunnelPhaseTimer -= deltaTime;
+        tunnelLightDir0.update(deltaTime);
+        tunnelLightDir1.update(deltaTime);
+
         if (tunnelPhaseTimer <= 0) {
-            if (ENGINE_DEBUG_LOGGING) System.out.println("TunnelLogic: Таймер фазы истек. Текущее состояние: " + tunnelControlState);
+            if (ENGINE_DEBUG_LOGGING) System.out.println("TunnelLogic: Таймер фазы истек ("+String.format("%.2f", tunnelPhaseTimer)+"). Текущее состояние: " + tunnelControlState);
             switch (tunnelControlState) {
                 case DIR0_GREEN:
                     tunnelControlState = TunnelControlState.DIR0_CLEARING;
@@ -94,9 +128,9 @@ public class SimulationEngine implements Runnable {
                     break;
                 case DIR0_CLEARING:
                     boolean carsInDir0 = areCarsInTunnel(0);
-                    if (ENGINE_DEBUG_LOGGING) System.out.println("TunnelLogic: Проверка DIR0_CLEARING. Машины напр.0 в тоннеле: " + carsInDir0);
-                    if (carsInDir0) {
-                        tunnelPhaseTimer = 1.0;
+                    if (ENGINE_DEBUG_LOGGING) System.out.println("TunnelLogic: Проверка DIR0_CLEARING. Машины напр.0 в тоннеле: " + carsInDir0 + ". Осталось времени очистки: " + String.format("%.2f", tunnelPhaseTimer));
+                    if (carsInDir0 && tunnelPhaseTimer > -5.0) {
+                        tunnelPhaseTimer = Math.max(tunnelPhaseTimer, 0.5);
                         break;
                     }
                     tunnelControlState = TunnelControlState.DIR1_GREEN;
@@ -112,9 +146,9 @@ public class SimulationEngine implements Runnable {
                     break;
                 case DIR1_CLEARING:
                     boolean carsInDir1 = areCarsInTunnel(1);
-                    if (ENGINE_DEBUG_LOGGING) System.out.println("TunnelLogic: Проверка DIR1_CLEARING. Машины напр.1 в тоннеле: " + carsInDir1);
-                    if (carsInDir1) {
-                        tunnelPhaseTimer = 1.0;
+                    if (ENGINE_DEBUG_LOGGING) System.out.println("TunnelLogic: Проверка DIR1_CLEARING. Машины напр.1 в тоннеле: " + carsInDir1 + ". Осталось времени очистки: " + String.format("%.2f", tunnelPhaseTimer));
+                    if (carsInDir1 && tunnelPhaseTimer > -5.0) {
+                        tunnelPhaseTimer = Math.max(tunnelPhaseTimer, 0.5);
                         break;
                     }
                     tunnelControlState = TunnelControlState.DIR0_GREEN;
@@ -128,12 +162,21 @@ public class SimulationEngine implements Runnable {
 
     private boolean areCarsInTunnel(int direction) {
         if (road == null || road.getCars() == null || road.getCars().isEmpty()) return false;
-        double entryMargin = 0.1;
-        double exitMargin = road.getLength() - 0.1;
+        double entryPointModel, exitPointModel;
+        if (direction == 0) {
+            entryPointModel = road.getLength() * 0.25;
+            exitPointModel = road.getLength() * 0.75;
+        } else {
+            entryPointModel = road.getLength() * 0.75;
+            exitPointModel = road.getLength() * 0.25;
+        }
         for (Car car : road.getCars()) {
             if (car.getDirection() == direction) {
-                if (direction == 0 && car.getPosition() > entryMargin && car.getPosition() < exitMargin) return true;
-                else if (direction == 1 && car.getPosition() < exitMargin && car.getPosition() > entryMargin) return true;
+                if (direction == 0) {
+                    if (car.getPosition() > entryPointModel - 5.0 && car.getPosition() < exitPointModel + 5.0) return true; // +5.0 для выезда
+                } else {
+                    if (car.getPosition() < entryPointModel + 5.0 && car.getPosition() > exitPointModel - 5.0) return true; // -5.0 для выезда
+                }
             }
         }
         return false;
@@ -147,6 +190,9 @@ public class SimulationEngine implements Runnable {
     @Override
     public void run() {
         long lastUpdateTime = System.nanoTime();
+        final double TARGET_FPS = 30.0;
+        final double OPTIMAL_TIME_PER_FRAME_NANO = 1_000_000_000.0 / TARGET_FPS;
+
         while (running) {
             synchronized (pauseLock) {
                 if (paused) {
@@ -154,35 +200,32 @@ public class SimulationEngine implements Runnable {
                     catch (InterruptedException e) { Thread.currentThread().interrupt(); running = false; break; }
                 }
             }
-
-            long currentTimeNano = System.nanoTime(); // Используем новое имя для текущего времени в наносекундах
-            long elapsedTimeNano = currentTimeNano - lastUpdateTime; // Здесь elapsedTimeNano объявляется и используется правильно
-            lastUpdateTime = currentTimeNano;
-
-            double deltaTime = elapsedTimeNano / 1_000_000_000.0;
-            double simulationDeltaTime = deltaTime * parameters.getSimulationSpeedFactor();
+            long loopStartTime = System.nanoTime();
+            double deltaTimeFromLastFrame = (loopStartTime - lastUpdateTime) / 1_000_000_000.0;
+            lastUpdateTime = loopStartTime;
+            deltaTimeFromLastFrame = Math.min(deltaTimeFromLastFrame, 0.1);
+            double simulationDeltaTime = deltaTimeFromLastFrame * parameters.getSimulationSpeedFactor();
 
             if (road != null) {
                 step(simulationDeltaTime);
             }
-
             if (simulationPanel != null) {
                 Road currentRoadForPanel = road;
                 double currentSimTimeForPanel = simulationTime;
                 SwingUtilities.invokeLater(() -> simulationPanel.updateSimulationState(currentRoadForPanel, currentSimTimeForPanel));
             }
+            long loopEndTime = System.nanoTime();
+            long timeTakenNano = loopEndTime - loopStartTime;
+            long sleepTimeNano = (long) (OPTIMAL_TIME_PER_FRAME_NANO - timeTakenNano);
 
-            try {
-                // Используем elapsedTimeNano, которая была рассчитана выше
-                long sleepTime = Math.max(0, (long) (parameters.getSimulationTimeStep() * 1000 / parameters.getSimulationSpeedFactor() - (elapsedTimeNano / 1_000_000)));
-                if (sleepTime > 0) {
-                    Thread.sleep(sleepTime);
-                } else {
-                    Thread.yield();
+            if (sleepTimeNano > 0) {
+                try {
+                    Thread.sleep(sleepTimeNano / 1_000_000, (int) (sleepTimeNano % 1_000_000));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt(); running = false;
                 }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                running = false;
+            } else {
+                Thread.yield();
             }
         }
         System.out.println("Поток симуляции завершил работу.");
@@ -191,83 +234,134 @@ public class SimulationEngine implements Runnable {
     private void step(double deltaTime) {
         if (deltaTime <= 0 || road == null) return;
         simulationTime += deltaTime;
-        if (isTunnelActive) updateTunnelLogic(deltaTime);
-        List<TrafficLight> lights = road.getTrafficLights();
-        if (lights != null) {
-            for (TrafficLight light : lights) light.update(deltaTime);
+        if (isTunnelActive) {
+            updateTunnelLogic(deltaTime);
+        } else {
+            List<TrafficLight> lights = road.getTrafficLights();
+            if (lights != null) {
+                for (TrafficLight light : lights) {
+                    if (!light.isExternallyControlled()) {
+                        light.update(deltaTime);
+                    }
+                }
+            }
         }
         if (flowGenerator != null) {
             TunnelControlState currentTunnelStateForGenerator = isTunnelActive ? this.tunnelControlState : null;
             Car[] newCars = flowGenerator.generateCars(deltaTime, currentTunnelStateForGenerator);
-            if (newCars != null) for (Car newCar : newCars) if (newCar != null) road.addCar(newCar);
+            if (newCars != null) {
+                for (Car newCar : newCars) {
+                    if (newCar != null) road.addCar(newCar);
+                }
+            }
         }
         List<Car> currentCars = road.getCars();
         if (currentCars != null) {
             final double APPROX_CAR_LENGTH = 5.0;
             for (Car car : currentCars) {
-                Car leadCar = findLeadCar(car, currentCars, car.getDirection());
-                double distanceToLeadBumperToBumper = (leadCar != null) ? Math.max(0.1, Math.abs(leadCar.getPosition() - car.getPosition()) - APPROX_CAR_LENGTH) : Double.POSITIVE_INFINITY;
-                double effectiveSpeedLimit = findEffectiveSpeedLimit(car, car.getDirection());
-                TrafficLight nextLight = findNextTrafficLight(car, car.getDirection());
-                double distanceToLightAbs = (nextLight != null) ? Math.abs(nextLight.getPosition() - car.getPosition()) : Double.POSITIVE_INFINITY;
-                TrafficLightState nextLightState = (nextLight != null) ? nextLight.getCurrentState() : null;
+                Car leadCar = findLeadCar(car, currentCars);
+                double distanceToLeadBumperToBumper = (leadCar != null) ?
+                        Math.max(0.01, Math.abs(leadCar.getPosition() - car.getPosition()) - APPROX_CAR_LENGTH) : Double.POSITIVE_INFINITY;
+                double effectiveSpeedLimit = findEffectiveSpeedLimit(car);
+                TrafficLight nextLight = findNextTrafficLight(car);
+                double distanceToLightAbs = Double.POSITIVE_INFINITY;
+                TrafficLightState nextLightState = null;
+                if (nextLight != null) {
+                    distanceToLightAbs = Math.abs(nextLight.getPosition() - car.getPosition());
+                    if ((car.getDirection() == 0 && car.getPosition() > nextLight.getPosition() + APPROX_CAR_LENGTH / 2) ||
+                            (car.getDirection() == 1 && car.getPosition() < nextLight.getPosition() - APPROX_CAR_LENGTH / 2)) {
+                        nextLightState = null;
+                        distanceToLightAbs = Double.POSITIVE_INFINITY;
+                    } else {
+                        nextLightState = nextLight.getCurrentState();
+                    }
+                }
                 car.update(deltaTime, leadCar, distanceToLeadBumperToBumper, effectiveSpeedLimit, nextLightState, distanceToLightAbs);
             }
         }
-        if (road.getCars() != null) road.getCars().removeIf(car -> (car.getDirection() == 0) ? car.getPosition() > road.getLength() + 20 : car.getPosition() < -20);
+        if (road.getCars() != null) {
+            road.getCars().removeIf(car ->
+                    (car.getDirection() == 0 && car.getPosition() > road.getLength() + CAR_RENDER_WIDTH) ||
+                            (car.getDirection() == 1 && car.getPosition() < -CAR_RENDER_WIDTH)
+            );
+        }
     }
 
-    private Car findLeadCar(Car currentCar, List<Car> allCars, int carDirection) {
+    private Car findLeadCar(Car currentCar, List<Car> allCars) {
         if (allCars == null) return null;
         Car leader = null;
-        double minDistance = Double.POSITIVE_INFINITY;
+        double minPositiveDistance = Double.POSITIVE_INFINITY;
         for (Car otherCar : allCars) {
-            if (otherCar.getId() == currentCar.getId() || otherCar.getLaneIndex() != currentCar.getLaneIndex() || otherCar.getDirection() != carDirection) continue;
-            double distance = (carDirection == 0) ? (otherCar.getPosition() - currentCar.getPosition()) : (currentCar.getPosition() - otherCar.getPosition());
-            if (distance > 0 && distance < minDistance) {
-                minDistance = distance;
+            if (otherCar.getId() == currentCar.getId() ||
+                    otherCar.getLaneIndex() != currentCar.getLaneIndex() ||
+                    otherCar.getDirection() != currentCar.getDirection()) {
+                continue;
+            }
+            double distance;
+            if (currentCar.getDirection() == 0) {
+                distance = otherCar.getPosition() - currentCar.getPosition();
+            } else {
+                distance = currentCar.getPosition() - otherCar.getPosition();
+            }
+            if (distance > 0.01 && distance < minPositiveDistance) {
+                minPositiveDistance = distance;
                 leader = otherCar;
             }
         }
         return leader;
     }
 
-    private double findEffectiveSpeedLimit(Car car, int carDirection) {
+    private double findEffectiveSpeedLimit(Car car) {
         List<RoadSign> signs = road.getRoadSigns();
-        double carMaxSpeed = car.getMaxSpeed();
-        if (signs == null || signs.isEmpty()) return carMaxSpeed;
-        double activeLimit = carMaxSpeed;
-        if (carDirection == 0) {
+        double carMaxModelSpeed = car.getMaxSpeed();
+        if (signs == null || signs.isEmpty()) return carMaxModelSpeed;
+        double activeLimit = carMaxModelSpeed;
+        if (car.getDirection() == 0) {
             for (RoadSign sign : signs) {
-                if (sign.getTargetDirection() != 0 && sign.getTargetDirection() != -1) continue;
+                if (sign.getTargetDirection() == 1) continue;
                 if (sign.getPosition() <= car.getPosition()) {
                     double limitFromSign = sign.getSpeedLimitValue();
-                    if (limitFromSign >= 0) activeLimit = limitFromSign;
-                } else break;
+                    if (limitFromSign >= 0) {
+                        activeLimit = limitFromSign;
+                    }
+                } else {
+                    break;
+                }
             }
-        } else { // carDirection == 1
-            activeLimit = carMaxSpeed;
-            for (RoadSign sign : signs) {
-                if (sign.getTargetDirection() != 1 && sign.getTargetDirection() != -1) continue;
+        } else {
+            for (int i = signs.size() - 1; i >= 0; i--) {
+                RoadSign sign = signs.get(i);
+                if (sign.getTargetDirection() == 0) continue;
                 if (sign.getPosition() >= car.getPosition()) {
                     double limitFromSign = sign.getSpeedLimitValue();
-                    if (limitFromSign >= 0) { activeLimit = limitFromSign; break; }
+                    if (limitFromSign >= 0) {
+                        activeLimit = limitFromSign;
+                    }
+                } else {
+                    break;
                 }
             }
         }
-        return Math.min(activeLimit, carMaxSpeed);
+        return Math.min(activeLimit, carMaxModelSpeed);
     }
 
-    private TrafficLight findNextTrafficLight(Car car, int carDirection) {
+    private TrafficLight findNextTrafficLight(Car car) {
         List<TrafficLight> lights = road.getTrafficLights();
-        if (lights == null) return null;
+        if (lights == null || lights.isEmpty()) return null;
         TrafficLight nextFoundLight = null;
-        double minDistance = Double.POSITIVE_INFINITY;
+        double minPositiveDistance = Double.POSITIVE_INFINITY;
         for (TrafficLight light : lights) {
-            if (light.getTargetDirection() != carDirection && light.getTargetDirection() != -1) continue;
-            double distance = (carDirection == 0) ? (light.getPosition() - car.getPosition()) : (car.getPosition() - light.getPosition());
-            if (distance > 0 && distance < minDistance) {
-                minDistance = distance;
+            if (light.getTargetDirection() != car.getDirection() && light.getTargetDirection() != -1) {
+                continue;
+            }
+            double distance;
+            if (car.getDirection() == 0) {
+                distance = light.getPosition() - car.getPosition();
+            } else {
+                distance = car.getPosition() - light.getPosition();
+            }
+            if (distance > - (CAR_RENDER_WIDTH / road.getLength() * getWidth() / 2.0) && distance < minPositiveDistance) {
+                minPositiveDistance = distance;
                 nextFoundLight = light;
             }
         }
@@ -279,8 +373,21 @@ public class SimulationEngine implements Runnable {
         if (this.flowGenerator != null) {
             this.flowGenerator.updateParameters(newParams);
         }
+        // Важно: после изменения параметров, особенно типа дороги, нужно переинициализировать
+        // всю симуляцию, чтобы применились новые настройки, например, для тоннеля.
+        this.initializeSimulation();
+        if (ENGINE_DEBUG_LOGGING) System.out.println("SimulationEngine: Параметры обновлены и симуляция переинициализирована.");
     }
 
     public Road getRoad() { return road; }
     public double getSimulationTime() { return simulationTime; }
+    public boolean isRunning() { return running; }
+    public boolean isPaused() { return paused; }
+    // Добавим метод для получения ширины панели, если он нужен в SimulationEngine
+    private int getWidth() {
+        if (simulationPanel != null) {
+            return simulationPanel.getWidth();
+        }
+        return 800; // Значение по умолчанию, если панель еще не доступна
+    }
 }

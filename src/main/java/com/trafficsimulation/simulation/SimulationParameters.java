@@ -4,16 +4,19 @@ import com.trafficsimulation.model.RoadType;
 
 public class SimulationParameters {
 
+    // Константа для длины дороги
+    public static final double FIXED_ROAD_LENGTH_KM = 2.0; // Длина дороги теперь 2 км
+
     // Дорога
     private RoadType roadType = RoadType.CITY_ROAD;
-    private double roadLengthKm = 5.0;
-    private int lanesPerDirection = 2;  // Это будет 1 для тоннеля
-    private int numberOfDirections = 1; // Это будет 2 для тоннеля (реверсивное)
+    // private double roadLengthKm = 5.0; // УДАЛЕНО или закомментировано
+    private int lanesPerDirection = 2;
+    private int numberOfDirections = 1;
 
     // Настройки светофоров для Тоннеля
-    private double tunnelDefaultRedDuration = 30.0;  // Используется, если светофоры тоннеля создаются автоматически
+    private double tunnelDefaultRedDuration = 30.0;
     private double tunnelDefaultGreenDuration = 30.0;
-    private double tunnelClearanceTime = 10.0; // Время на очистку тоннеля (сек), когда оба светофора красные
+    private double tunnelClearanceTime = 10.0;
 
     // Флаги случайности
     private boolean isRandomSpeedFlow = false;
@@ -40,12 +43,16 @@ public class SimulationParameters {
     private double speedExponentialIntensityPerKmh = 0.05;
 
     // Симуляция
-    private double simulationTimeStep = 0.1;
+    private double simulationTimeStep = 0.1; // Шаг времени для обновления логики (не отрисовки)
     private double simulationSpeedFactor = 1.0;
 
     // --- Геттеры ---
     public RoadType getRoadType() { return roadType; }
-    public double getRoadLengthKm() { return roadLengthKm; }
+
+    public double getRoadLengthKm() { // ИЗМЕНЕНО
+        return FIXED_ROAD_LENGTH_KM;
+    }
+
     public int getLanesPerDirection() { return lanesPerDirection; }
     public int getNumberOfDirections() { return numberOfDirections; }
 
@@ -74,7 +81,7 @@ public class SimulationParameters {
 
     // --- Сеттеры ---
     public void setRoadType(RoadType roadType) { this.roadType = roadType; }
-    public void setRoadLengthKm(double roadLengthKm) { this.roadLengthKm = roadLengthKm; }
+    // public void setRoadLengthKm(double roadLengthKm) { this.roadLengthKm = roadLengthKm; } // УДАЛЕНО или закомментировано
     public void setLanesPerDirection(int lanes) { this.lanesPerDirection = lanes; }
     public void setNumberOfDirections(int directions) { this.numberOfDirections = directions; }
 
@@ -103,6 +110,12 @@ public class SimulationParameters {
 
     @Override
     public String toString() {
-        return "SimulationParameters{" + /* ... как раньше, можно добавить параметры тоннеля ... */ '}';
+        return "SimulationParameters{" +
+                "roadType=" + roadType +
+                ", roadLengthKm=" + getRoadLengthKm() + // Используем геттер
+                ", lanesPerDirection=" + lanesPerDirection +
+                ", numberOfDirections=" + numberOfDirections +
+                // ... другие параметры для полноты, если нужно для отладки ...
+                '}';
     }
 }

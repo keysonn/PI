@@ -12,7 +12,7 @@ public class RoadSettingsDialog extends JDialog {
     private boolean settingsSaved = false;
 
     private JComboBox<RoadType> roadTypeComboBox;
-    private JSpinner roadLengthSpinner;
+    // private JSpinner roadLengthSpinner; // УДАЛЕНО
 
     private JPanel nonTunnelSettingsPanel;
     private JToggleButton dirOneWayButton, dirTwoWayButton;
@@ -20,7 +20,7 @@ public class RoadSettingsDialog extends JDialog {
     private JSlider lanesSlider;
 
     private JPanel tunnelSettingsPanel;
-    private JSpinner tunnelRedLightSpinner, tunnelGreenLightSpinner, tunnelClearanceSpinner; // Добавлен clearance
+    private JSpinner tunnelRedLightSpinner, tunnelGreenLightSpinner, tunnelClearanceSpinner;
 
     public RoadSettingsDialog(Frame owner, SimulationParameters currentParams) {
         super(owner, "Настройка параметров автодороги", true);
@@ -31,13 +31,14 @@ public class RoadSettingsDialog extends JDialog {
         loadParameters();
         updateVisibilityBasedOnRoadType();
         pack();
-        setMinimumSize(new Dimension(Math.max(500, getPreferredSize().width), getPreferredSize().height)); // Увеличил мин. ширину
+        // Уменьшим минимальную ширину, так как один контрол убрали
+        setMinimumSize(new Dimension(Math.max(450, getPreferredSize().width), getPreferredSize().height));
         setLocationRelativeTo(owner);
     }
 
     private void initComponents() {
         roadTypeComboBox = new JComboBox<>(new RoadType[]{RoadType.CITY_ROAD, RoadType.HIGHWAY, RoadType.TUNNEL});
-        roadLengthSpinner = new JSpinner(new SpinnerNumberModel(5.0, 1.0, 50.0, 0.5));
+        // roadLengthSpinner = new JSpinner(new SpinnerNumberModel(params.getRoadLengthKm(), 1.0, 50.0, 0.5)); // УДАЛЕНО
         dirOneWayButton = new JToggleButton("Одностороннее", true);
         dirTwoWayButton = new JToggleButton("Двустороннее");
         directionGroup = new ButtonGroup();
@@ -47,7 +48,7 @@ public class RoadSettingsDialog extends JDialog {
         lanesSlider.setPaintLabels(true); lanesSlider.setSnapToTicks(true);
         tunnelRedLightSpinner = new JSpinner(new SpinnerNumberModel(30, 20, 100, 1));
         tunnelGreenLightSpinner = new JSpinner(new SpinnerNumberModel(30, 20, 100, 1));
-        tunnelClearanceSpinner = new JSpinner(new SpinnerNumberModel(10, 5, 60, 1)); // Время очистки 5-60 сек
+        tunnelClearanceSpinner = new JSpinner(new SpinnerNumberModel(10, 5, 60, 1));
     }
 
     private void layoutComponents() {
@@ -62,15 +63,15 @@ public class RoadSettingsDialog extends JDialog {
         mainPanel.add(roadTypePanel);
         mainPanel.add(Box.createVerticalStrut(5));
 
-        // Длина участка - всегда видима
-        JPanel lengthPanel = new JPanel(new GridBagLayout());
-        GridBagConstraints gbcLength = new GridBagConstraints();
-        gbcLength.insets = new Insets(5,5,5,5); gbcLength.anchor = GridBagConstraints.WEST;
-        gbcLength.gridx = 0; gbcLength.gridy = 0; lengthPanel.add(new JLabel("Укажите длину участка автодороги:"), gbcLength);
-        JPanel valueLengthPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0,0));
-        valueLengthPanel.add(roadLengthSpinner); valueLengthPanel.add(new JLabel(" км"));
-        gbcLength.gridx = 1; lengthPanel.add(valueLengthPanel, gbcLength);
-        mainPanel.add(lengthPanel);
+        // Панель для длины участка УДАЛЕНА
+        // JPanel lengthPanel = new JPanel(new GridBagLayout());
+        // GridBagConstraints gbcLength = new GridBagConstraints();
+        // gbcLength.insets = new Insets(5,5,5,5); gbcLength.anchor = GridBagConstraints.WEST;
+        // gbcLength.gridx = 0; gbcLength.gridy = 0; lengthPanel.add(new JLabel("Укажите длину участка автодороги:"), gbcLength);
+        // JPanel valueLengthPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0,0));
+        // valueLengthPanel.add(roadLengthSpinner); valueLengthPanel.add(new JLabel(" км"));
+        // gbcLength.gridx = 1; lengthPanel.add(valueLengthPanel, gbcLength);
+        // mainPanel.add(lengthPanel);
 
         nonTunnelSettingsPanel = new JPanel(new GridBagLayout());
         GridBagConstraints gbcNonTunnel = new GridBagConstraints();
@@ -94,7 +95,7 @@ public class RoadSettingsDialog extends JDialog {
         JPanel greenPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         greenPanel.add(tunnelGreenLightSpinner); greenPanel.add(new JLabel(" секунд"));
         gbcTunnel.gridx = 1; tunnelSettingsPanel.add(greenPanel, gbcTunnel);
-        gbcTunnel.gridy++; gbcTunnel.gridx = 0; tunnelSettingsPanel.add(new JLabel("Время очистки тоннеля:"), gbcTunnel); // Новое поле
+        gbcTunnel.gridy++; gbcTunnel.gridx = 0; tunnelSettingsPanel.add(new JLabel("Время очистки тоннеля:"), gbcTunnel);
         JPanel clearancePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         clearancePanel.add(tunnelClearanceSpinner); clearancePanel.add(new JLabel(" секунд"));
         gbcTunnel.gridx = 1; tunnelSettingsPanel.add(clearancePanel, gbcTunnel);
@@ -122,7 +123,7 @@ public class RoadSettingsDialog extends JDialog {
 
     private void loadParameters() {
         roadTypeComboBox.setSelectedItem(params.getRoadType());
-        roadLengthSpinner.setValue(params.getRoadLengthKm());
+        // roadLengthSpinner.setValue(params.getRoadLengthKm()); // УДАЛЕНО
         if (params.getNumberOfDirections() == 1) dirOneWayButton.setSelected(true);
         else dirTwoWayButton.setSelected(true);
         lanesSlider.setValue(params.getLanesPerDirection());
@@ -133,11 +134,11 @@ public class RoadSettingsDialog extends JDialog {
 
     private void saveAndClose() {
         params.setRoadType((RoadType) roadTypeComboBox.getSelectedItem());
-        params.setRoadLengthKm(((Number) roadLengthSpinner.getValue()).doubleValue());
+        // params.setRoadLengthKm(((Number) roadLengthSpinner.getValue()).doubleValue()); // УДАЛЕНО
 
         if (params.getRoadType() == RoadType.TUNNEL) {
-            params.setNumberOfDirections(2);  // Тоннель для реверса всегда двунаправленный в данных
-            params.setLanesPerDirection(1);   // Но в каждый момент времени активна одна полоса
+            params.setNumberOfDirections(2);
+            params.setLanesPerDirection(1);
             params.setTunnelDefaultRedDuration(((Number) tunnelRedLightSpinner.getValue()).doubleValue());
             params.setTunnelDefaultGreenDuration(((Number) tunnelGreenLightSpinner.getValue()).doubleValue());
             params.setTunnelClearanceTime(((Number) tunnelClearanceSpinner.getValue()).doubleValue());
@@ -150,8 +151,8 @@ public class RoadSettingsDialog extends JDialog {
     }
 
     public boolean showDialog() {
-        loadParameters();
-        updateVisibilityBasedOnRoadType();
+        // loadParameters(); // Уже вызывается в конструкторе перед pack(), можно убрать дубль
+        updateVisibilityBasedOnRoadType(); // Важно вызвать перед setVisible(true)
         setVisible(true);
         return settingsSaved;
     }
