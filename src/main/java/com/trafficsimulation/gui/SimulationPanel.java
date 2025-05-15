@@ -1,315 +1,283 @@
 package com.trafficsimulation.gui;
 
+import com.trafficsimulation.model.Car;
+import com.trafficsimulation.model.Road;
+import com.trafficsimulation.model.RoadType;
+import com.trafficsimulation.model.TrafficLight;
+import com.trafficsimulation.model.TrafficLightState;
+
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.awt.RenderingHints;
-import java.awt.FontMetrics;
-
-import com.trafficsimulation.model.*;
-// import com.trafficsimulation.gui.VisualizationMode; // УДАЛЕН ИМПОРТ
+// import java.util.List; // Не используется напрямую здесь
 
 public class SimulationPanel extends JPanel {
 
-    private Road currentRoad;
-    private double currentTime;
-    private final int LANE_HEIGHT_PX = 30;
-    private final int CAR_WIDTH_PX = 22;
-    private final int CAR_HEIGHT_PX = 12;
+    private Road road;
+    private double simulationTime;
 
-    private Font carSpeedFont;
-    private Font roadSignFont;
-    private Font infoFont;
-    private Font placementHintFont;
-    private Font trafficLightTimerFont;
-    // private Font carDebugFont; // УДАЛЕНО
+    private boolean placementModeActive = false;
+    private String placementHint = null;
 
-    // private VisualizationMode currentVizMode = VisualizationMode.STANDARD; // УДАЛЕНО
+    private static final int ROAD_RENDER_HEIGHT = 80;
+    private static final Color ROAD_COLOR = Color.DARK_GRAY;
+    private static final Color LANE_SEPARATOR_COLOR = Color.YELLOW;
+    private static final Color GRASS_COLOR = new Color(34, 139, 34);
 
-    private boolean isInPlacementMode = false;
-    private String placementObjectType = null;
-    private Point mousePosition = null;
+    private static final int TRAFFIC_LIGHT_VISUAL_WIDTH = 20; // Уменьшил для более аккуратного вида без коробки
+    private static final int TRAFFIC_LIGHT_POLE_HEIGHT = 30;
+    private static final Color TRAFFIC_LIGHT_POLE_COLOR = Color.DARK_GRAY;
+
+    private static final int CAR_RENDER_WIDTH = 30;  // Ширина машинки
+    private static final int CAR_RENDER_HEIGHT = 16; // Высота машинки
+    private static final int CAR_ARC_RADIUS = 8;     // Скругление углов машинки
+
 
     public SimulationPanel() {
-        setPreferredSize(new Dimension(1000, 400));
-        setBackground(new Color(34, 139, 34));
-        carSpeedFont = new Font("Arial", Font.BOLD, 10);
-        roadSignFont = new Font("Arial", Font.BOLD, 9);
-        infoFont = new Font("Arial", Font.PLAIN, 12);
-        placementHintFont = new Font("Arial", Font.ITALIC, 12);
-        trafficLightTimerFont = new Font("Monospaced", Font.BOLD, 10);
-        // carDebugFont = new Font("Arial", Font.PLAIN, 9); // УДАЛЕНО
-
-        addMouseMotionListener(new MouseAdapter() {
-            @Override
-            public void mouseMoved(MouseEvent e) {
-                if (isInPlacementMode) {
-                    mousePosition = e.getPoint();
-                    repaint();
-                }
-            }
-            @Override
-            public void mouseExited(MouseEvent e) {
-                if (isInPlacementMode) {
-                    mousePosition = null;
-                    repaint();
-                }
-            }
-        });
-        System.out.println("SimulationPanel создана.");
+        setPreferredSize(new Dimension(800, 600));
+        setBackground(GRASS_COLOR);
     }
 
-    public void updateSimulationState(Road road, double time) {
-        this.currentRoad = road;
-        this.currentTime = time;
-        this.repaint();
-    }
-
-    public void setPlacementMode(boolean enabled, String objectType) {
-        this.isInPlacementMode = enabled;
-        this.placementObjectType = objectType;
-        if (enabled) {
-            setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
-        } else {
-            setCursor(Cursor.getDefaultCursor());
-            mousePosition = null;
-        }
+    public void updateSimulationState(Road road, double simulationTime) {
+        this.road = road;
+        this.simulationTime = simulationTime;
         repaint();
     }
 
-    // public void setVisualizationMode(VisualizationMode mode) { /* УДАЛЕН МЕТОД */ }
-
+    public void setPlacementMode(boolean active, String hint) {
+        this.placementModeActive = active;
+        this.placementHint = hint;
+        if (active) {
+            setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
+        } else {
+            setCursor(Cursor.getDefaultCursor());
+        }
+        repaint();
+    }
 
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         Graphics2D g2d = (Graphics2D) g;
+
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
 
-        if (currentRoad == null) {
-            g2d.setColor(Color.WHITE);
-            g2d.setFont(new Font("Arial", Font.BOLD, 20));
-            String text = isInPlacementMode ? "Инициализируйте дорогу (Настройки/Старт) для расстановки." : "Инициализация...";
+        if (road == null) {
+            g2d.setColor(Color.BLACK);
+            g2d.setFont(new Font("Arial", Font.BOLD, 16));
+            String message = "Дорога не инициализирована. Задайте параметры и запустите генерацию.";
             FontMetrics fm = g2d.getFontMetrics();
-            int x = (getWidth() - fm.stringWidth(text)) / 2;
-            int y = (getHeight() - fm.getHeight()) / 2 + fm.getAscent();
-            g2d.drawString(text, x, y);
+            g2d.drawString(message, getWidth() / 2 - fm.stringWidth(message) / 2, getHeight() / 2);
+            return;
+        }
+
+        int roadY = getHeight() / 2 - ROAD_RENDER_HEIGHT / 2;
+        drawRoadSurface(g2d, roadY);
+
+        if (road.getCars() != null && !road.getCars().isEmpty()) {
+            for (Car car : road.getCars()) {
+                drawCar(g2d, car, roadY);
+            }
+        }
+
+        if (road.getTrafficLights() != null && !road.getTrafficLights().isEmpty()) {
+            int panelWidth = getWidth();
+            for (TrafficLight light : road.getTrafficLights()) {
+                int lightScreenX;
+                int lightScreenY = roadY - (TRAFFIC_LIGHT_VISUAL_WIDTH) - 5; // Y для светофора над дорогой (с учетом диаметра сигнала)
+                if (light.getTargetDirection() == 1 && road.getType() != RoadType.TUNNEL && road.getNumberOfDirections() == 2) {
+                    lightScreenY = roadY + ROAD_RENDER_HEIGHT + 5 + TRAFFIC_LIGHT_POLE_HEIGHT; // Y для светофора под дорогой
+                }
+
+
+                double roadModelLength = road.getLength();
+                if (roadModelLength > 0) {
+                    lightScreenX = (int) ((light.getPosition() / roadModelLength) * panelWidth);
+                    lightScreenX -= TRAFFIC_LIGHT_VISUAL_WIDTH / 2;
+                    lightScreenX = Math.max(0, Math.min(lightScreenX, panelWidth - TRAFFIC_LIGHT_VISUAL_WIDTH));
+                } else {
+                    lightScreenX = 10;
+                }
+                drawTrafficLight(g2d, light, lightScreenX, lightScreenY);
+            }
+        }
+        drawInfoPanel(g2d);
+
+        if (placementModeActive && placementHint != null) {
+            g2d.setColor(new Color(0,0,200, 200));
+            g2d.setFont(new Font("Arial", Font.BOLD, 14));
+            String hintText = "РЕЖИМ: " + placementHint + ". Кликните на дорогу для размещения.";
+            FontMetrics fm = g2d.getFontMetrics();
+            int textWidth = fm.stringWidth(hintText);
+            g2d.fillRect(getWidth() / 2 - textWidth / 2 - 10, getHeight() - 65 - fm.getAscent(), textWidth + 20, fm.getHeight() + 5);
+            g2d.setColor(Color.WHITE);
+            g2d.drawString(hintText, getWidth() / 2 - textWidth / 2, getHeight() - 60);
+        }
+    }
+
+    private void drawRoadSurface(Graphics2D g2d, int roadY) {
+        g2d.setColor(ROAD_COLOR);
+        g2d.fillRect(0, roadY, getWidth(), ROAD_RENDER_HEIGHT);
+        g2d.setColor(LANE_SEPARATOR_COLOR);
+
+        int lanesPerDirection;
+        if (road.getNumberOfDirections() > 0 && road.getNumberOfLanes() > 0) {
+            lanesPerDirection = road.getNumberOfLanes() / road.getNumberOfDirections();
         } else {
-            drawRoadSurface(g2d);
-            drawLanesAndMarkings(g2d);
-            drawTrafficLights(g2d);
-            drawRoadSigns(g2d);
-            drawCars(g2d);
+            lanesPerDirection = road.getNumberOfLanes();
         }
-        drawInfo(g2d);
-        if (isInPlacementMode && placementObjectType != null && mousePosition != null) {
-            drawPlacementHint(g2d);
+        if (lanesPerDirection == 0) lanesPerDirection = 1;
+
+        int numLanesTotalOnScreen = road.getNumberOfLanes();
+        if (numLanesTotalOnScreen == 0) numLanesTotalOnScreen = 1;
+        int laneVisualHeight = ROAD_RENDER_HEIGHT / numLanesTotalOnScreen;
+
+        if (road.getType() == RoadType.TUNNEL) {
+            g2d.setStroke(new BasicStroke(2));
+            g2d.drawLine(0, roadY + ROAD_RENDER_HEIGHT / 2, getWidth(), roadY + ROAD_RENDER_HEIGHT / 2);
+        } else {
+            if (road.getNumberOfDirections() == 2) {
+                g2d.setStroke(new BasicStroke(3));
+                g2d.drawLine(0, roadY + (lanesPerDirection * laneVisualHeight),
+                        getWidth(), roadY + (lanesPerDirection * laneVisualHeight));
+            }
+            g2d.setStroke(new BasicStroke(2, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND,
+                    0, new float[]{15, 10}, 0));
+            for (int dir = 0; dir < road.getNumberOfDirections(); dir++) {
+                for (int lane = 1; lane < lanesPerDirection; lane++) {
+                    int lineY = roadY + (dir * lanesPerDirection * laneVisualHeight) + (lane * laneVisualHeight);
+                    g2d.drawLine(0, lineY, getWidth(), lineY);
+                }
+            }
         }
-    }
-
-    private void drawPlacementHint(Graphics2D g2d){
-        if (mousePosition == null) return;
-        g2d.setColor(Color.YELLOW);
-        g2d.drawLine(mousePosition.x, 0, mousePosition.x, getHeight());
-        g2d.setFont(placementHintFont);
-        String text = "Клик: " + placementObjectType;
-        g2d.drawString(text, mousePosition.x + 5, mousePosition.y - 5);
-    }
-
-    private void drawRoadSurface(Graphics2D g2d) {
-        if (currentRoad == null) return;
-        int totalLanes = currentRoad.getNumberOfLanes();
-        int roadPixelHeight = totalLanes * LANE_HEIGHT_PX;
-        int roadY = getHeight() / 2 - roadPixelHeight / 2;
-        g2d.setColor(new Color(105, 105, 105));
-        g2d.fillRect(0, roadY, getWidth(), roadPixelHeight);
-    }
-
-    private void drawLanesAndMarkings(Graphics2D g2d) {
-        if (currentRoad == null) return;
-        int totalLanes = currentRoad.getNumberOfLanes();
-        int lanesPerDir = currentRoad.getNumberOfLanes() / currentRoad.getNumberOfDirections();
-        int roadPixelHeight = totalLanes * LANE_HEIGHT_PX;
-        int roadY = getHeight() / 2 - roadPixelHeight / 2;
         g2d.setColor(Color.WHITE);
-        Stroke dashed = new BasicStroke(1, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{9}, 0);
-        Stroke solid = new BasicStroke(1);
-        Stroke doubleSolidYellow = new BasicStroke(1);
-
-        for (int i = 0; i < totalLanes; i++) {
-            if (i == 0) continue;
-            int lineY = roadY + i * LANE_HEIGHT_PX;
-            if (currentRoad.getNumberOfDirections() == 2 && i == lanesPerDir) {
-                g2d.setColor(Color.YELLOW);
-                g2d.setStroke(doubleSolidYellow);
-                g2d.drawLine(0, lineY - 1, getWidth(), lineY - 1);
-                g2d.drawLine(0, lineY + 1, getWidth(), lineY + 1);
-            } else {
-                g2d.setStroke(dashed);
-                g2d.setColor(Color.WHITE);
-                g2d.drawLine(0, lineY, getWidth(), lineY);
-            }
-        }
-        g2d.setStroke(solid);
+        g2d.setStroke(new BasicStroke(2));
+        g2d.drawLine(0, roadY, getWidth(), roadY);
+        g2d.drawLine(0, roadY + ROAD_RENDER_HEIGHT, getWidth(), roadY + ROAD_RENDER_HEIGHT);
     }
 
-    private void drawCars(Graphics2D g2d) {
-        if (currentRoad == null || currentRoad.getCars() == null) return;
-        int totalLanes = currentRoad.getNumberOfLanes();
-        int roadPixelHeight = totalLanes * LANE_HEIGHT_PX;
-        int roadY = getHeight() / 2 - roadPixelHeight / 2;
-        g2d.setFont(carSpeedFont);
-        FontMetrics fmCarSpeed = g2d.getFontMetrics();
+    private void drawTrafficLight(Graphics2D g2d, TrafficLight light, int screenX, int screenY_base_of_signal) {
+        // screenY_base_of_signal - это Y координата, где должен начаться сам СИГНАЛ (круг)
+        int signalDiameter = TRAFFIC_LIGHT_VISUAL_WIDTH; // Диаметр сигнала равен ширине "светофора"
+        int signalRadius = signalDiameter / 2;
 
-        for (Car car : currentRoad.getCars()) {
-            int carScreenX = (int) ((car.getPosition() / currentRoad.getLength()) * getWidth());
-            int carScreenY = roadY + car.getLaneIndex() * LANE_HEIGHT_PX + (LANE_HEIGHT_PX - CAR_HEIGHT_PX) / 2;
-            int carRectX = carScreenX - CAR_WIDTH_PX / 2;
+        // Координаты верхнего левого угла овала сигнала
+        int signalOvalX = screenX;
+        int signalOvalY = screenY_base_of_signal;
 
-            Color carBodyColor;
-            Color carCabinColor;
 
-            if (car.getDirection() == 0) {
-                carBodyColor = new Color(0, 150, 255);
-                carCabinColor = new Color(100, 200, 255);
-            } else {
-                carBodyColor = new Color(255, 60, 150);
-                carCabinColor = new Color(255, 130, 200);
-            }
-
-            g2d.setColor(carBodyColor);
-            g2d.fillRoundRect(carRectX, carScreenY, CAR_WIDTH_PX, CAR_HEIGHT_PX, 5, 5);
-            int cabinWidth = CAR_WIDTH_PX * 2 / 3;
-            int cabinHeight = CAR_HEIGHT_PX * 2 / 3;
-            int cabinOffsetX = (CAR_WIDTH_PX - cabinWidth) / 2;
-            int cabinOffsetY = (CAR_HEIGHT_PX - cabinHeight) / 4;
-            g2d.setColor(carCabinColor);
-            g2d.fillRoundRect(carRectX + cabinOffsetX, carScreenY + cabinOffsetY, cabinWidth, cabinHeight, 3,3);
-            g2d.setColor(Color.BLACK);
-            g2d.drawRoundRect(carRectX, carScreenY, CAR_WIDTH_PX, CAR_HEIGHT_PX, 5, 5);
-
-            g2d.setColor(Color.BLACK);
-            String speedText = String.format("%.0f", car.getCurrentSpeed() * 3.6);
-            int textWidth = fmCarSpeed.stringWidth(speedText);
-            int textX = carScreenX - textWidth / 2;
-            int textY = carScreenY + fmCarSpeed.getAscent() - 1;
-            g2d.drawString(speedText, textX, textY);
+        // Столб
+        g2d.setColor(TRAFFIC_LIGHT_POLE_COLOR);
+        int poleX = screenX + signalRadius - 2; // Центрируем столб под сигналом
+        if (screenY_base_of_signal < getHeight() / 2) { // Светофор над дорогой
+            g2d.fillRect(poleX, signalOvalY + signalDiameter, 4, TRAFFIC_LIGHT_POLE_HEIGHT);
+        } else { // Светофор под дорогой
+            g2d.fillRect(poleX, signalOvalY - TRAFFIC_LIGHT_POLE_HEIGHT, 4, TRAFFIC_LIGHT_POLE_HEIGHT);
         }
+
+        // Сам сигнал (без корпуса)
+        Color signalColor;
+        if (light.getCurrentState() == TrafficLightState.GREEN) {
+            signalColor = Color.GREEN.brighter();
+        } else if (light.getCurrentState() == TrafficLightState.RED) {
+            signalColor = Color.RED.brighter();
+        } else {
+            signalColor = Color.GRAY;
+        }
+        g2d.setColor(signalColor);
+        g2d.fillOval(signalOvalX, signalOvalY, signalDiameter, signalDiameter);
+
+        // Оставшееся время
+        Color textColor = Color.WHITE;
+        if (light.getCurrentState() == TrafficLightState.GREEN) textColor = Color.BLACK;
+
+        g2d.setColor(textColor);
+        g2d.setFont(new Font("Arial", Font.BOLD, Math.max(9, signalRadius - 2)));
+        String timeText = String.format("%.0f", light.getRemainingTime());
+        FontMetrics fm = g2d.getFontMetrics();
+        int textWidth = fm.stringWidth(timeText);
+        g2d.drawString(timeText,
+                signalOvalX + signalRadius - textWidth / 2,
+                signalOvalY + signalRadius + fm.getAscent() / 2 -1);
     }
 
-    private void drawTrafficLights(Graphics2D g2d) {
-        if (currentRoad == null || currentRoad.getTrafficLights() == null) return;
-        int roadPixelHeight = currentRoad.getNumberOfLanes() * LANE_HEIGHT_PX;
-        int roadY = getHeight() / 2 - roadPixelHeight / 2;
 
-        for (TrafficLight light : currentRoad.getTrafficLights()) {
-            int lightScreenX = (int) ((light.getPosition() / currentRoad.getLength()) * getWidth());
-            int lightSize = LANE_HEIGHT_PX / 2 + 2;
+    private void drawCar(Graphics2D g2d, Car car, int roadSurfaceY) {
+        double roadModelLength = road.getLength();
+        int panelWidth = getWidth();
+        int carScreenX;
 
-            int lightScreenY;
-            int столбикYStart;
-            int столбикHeight;
-
-            if (light.getTargetDirection() == 0) { // Для движения слева-направо, светофор сверху
-                lightScreenY = roadY - lightSize - 5;
-                столбикYStart = lightScreenY + lightSize;
-                столбикHeight = roadY - столбикYStart;
-            } else { // Для движения справа-налево, светофор снизу
-                lightScreenY = roadY + roadPixelHeight + 5;
-                столбикYStart = roadY + roadPixelHeight;
-                столбикHeight = lightScreenY - столбикYStart;
-            }
-
-            g2d.setColor(Color.DARK_GRAY.darker());
-            g2d.fillRect(lightScreenX - 2, столбикYStart, 4, столбикHeight);
-
-            switch (light.getCurrentState()) {
-                case RED: g2d.setColor(Color.RED); break;
-                case GREEN: g2d.setColor(Color.GREEN); break;
-                default: g2d.setColor(Color.BLACK); break;
-            }
-            g2d.fillOval(lightScreenX - lightSize / 2, lightScreenY, lightSize, lightSize);
-            g2d.setColor(Color.BLACK);
-            g2d.drawOval(lightScreenX - lightSize / 2, lightScreenY, lightSize, lightSize);
-
-            String timeText = String.format("%.0f", light.getRemainingTime());
-            g2d.setFont(trafficLightTimerFont);
-            FontMetrics fmTimer = g2d.getFontMetrics();
-            int textWidth = fmTimer.stringWidth(timeText);
-            if (light.getCurrentState() == TrafficLightState.RED) g2d.setColor(Color.WHITE);
-            else if (light.getCurrentState() == TrafficLightState.GREEN) g2d.setColor(Color.BLACK);
-            else g2d.setColor(Color.DARK_GRAY);
-            g2d.drawString(timeText, lightScreenX - textWidth / 2, lightScreenY + lightSize/2 + fmTimer.getAscent()/2 -1);
+        if (roadModelLength > 0) {
+            carScreenX = (int) ((car.getPosition() / roadModelLength) * panelWidth);
+        } else {
+            carScreenX = (car.getDirection() == 0) ? -CAR_RENDER_WIDTH : panelWidth;
         }
-    }
+        carScreenX -= CAR_RENDER_WIDTH / 2;
 
-    private void drawRoadSigns(Graphics2D g2d) {
-        if (currentRoad == null || currentRoad.getRoadSigns() == null) return;
-        int roadPixelHeight = currentRoad.getNumberOfLanes() * LANE_HEIGHT_PX;
-        int roadY = getHeight() / 2 - roadPixelHeight / 2;
-        g2d.setFont(roadSignFont);
-        FontMetrics fmSign = g2d.getFontMetrics();
-
-        for(RoadSign sign : currentRoad.getRoadSigns()){
-            int signX = (int) ( (sign.getPosition() / currentRoad.getLength()) * getWidth() );
-
-            String signText = sign.getType().name().replace("SPEED_LIMIT_", "").replace("_SIGN_GENERIC", "INFO");
-            int textWidth = fmSign.stringWidth(signText);
-            int textHeightWithDescent = fmSign.getHeight();
-            int textAscent = fmSign.getAscent();
-            int padding = 4;
-            int rectWidth = textWidth + 2 * padding;
-            int rectHeight = textHeightWithDescent;
-            int rectX = signX - rectWidth / 2;
-
-            int signYBase; // Базовая точка для верха таблички знака
-            int postEndY;  // Конец столбика
-
-            if (sign.getTargetDirection() == 0) { // Для движения слева-направо, знак снизу
-                signYBase = roadY + roadPixelHeight + 5;
-                postEndY = signYBase; // Столбик идет до начала таблички снизу
-            } else { // Для движения справа-налево, знак сверху
-                signYBase = roadY - 20 - rectHeight; // 20 - отступ сверху до таблички
-                postEndY = roadY - 5; // Столбик идет до обочины сверху
-            }
-            int rectY = signYBase;
-
-            // Рисуем "столбик" знака
-            g2d.setColor(Color.GRAY.darker());
-            if (sign.getTargetDirection() == 0) { // Знак снизу, столбик от дороги до знака
-                g2d.fillRect(signX - 1, roadY + roadPixelHeight, 2, rectY - (roadY + roadPixelHeight));
-            } else { // Знак сверху, столбик от знака до дороги
-                g2d.fillRect(signX - 1, rectY + rectHeight, 2, postEndY - (rectY + rectHeight));
-            }
-
-            if(sign.getType().name().contains("SPEED_LIMIT")){
-                g2d.setColor(Color.WHITE);
-                g2d.fillOval(rectX-padding, rectY-padding, rectWidth+2*padding, rectHeight+2*padding);
-                g2d.setColor(Color.RED);
-                g2d.setStroke(new BasicStroke(2));
-                g2d.drawOval(rectX-padding, rectY-padding, rectWidth+2*padding, rectHeight+2*padding);
-                g2d.setColor(Color.BLACK);
-            } else {
-                g2d.setColor(Color.BLUE);
-                g2d.fillRect(rectX, rectY, rectWidth, rectHeight);
-                g2d.setColor(Color.WHITE);
-                g2d.drawRect(rectX, rectY, rectWidth, rectHeight);
-            }
-            g2d.drawString(signText, rectX + padding, rectY + textAscent + padding/2 -1);
-            g2d.setStroke(new BasicStroke(1));
+        int lanesPerDirVisual;
+        if (road.getNumberOfDirections() > 0 && road.getNumberOfLanes() > 0) {
+            lanesPerDirVisual = road.getNumberOfLanes() / road.getNumberOfDirections();
+        } else {
+            lanesPerDirVisual = road.getNumberOfLanes();
         }
-    }
+        if (lanesPerDirVisual == 0) lanesPerDirVisual = 1;
 
-    private void drawInfo(Graphics2D g2d) {
+        int totalLanesOnScreenVisual = road.getNumberOfLanes();
+        if(totalLanesOnScreenVisual == 0) totalLanesOnScreenVisual = 1;
+        int laneVisualHeight = ROAD_RENDER_HEIGHT / totalLanesOnScreenVisual;
+        int carScreenY = roadSurfaceY + (car.getLaneIndex() * laneVisualHeight) + (laneVisualHeight / 2 - CAR_RENDER_HEIGHT / 2);
+
+        Color carColor;
+        // Возвращаем цвета как было (или подберите свои)
+        // Например, синий для направления 0 и фиолетовый для направления 1
+        if (car.getDirection() == 0) {
+            carColor = new Color(60, 100, 200); // Более приятный синий
+        } else {
+            carColor = new Color(150, 60, 180); // Фиолетовый
+        }
+        g2d.setColor(carColor);
+        // Рисуем скругленный прямоугольник
+        g2d.fillRoundRect(carScreenX, carScreenY, CAR_RENDER_WIDTH, CAR_RENDER_HEIGHT, CAR_ARC_RADIUS, CAR_ARC_RADIUS);
+
+        // Окантовка для лучшей видимости
+        g2d.setColor(carColor.darker());
+        g2d.drawRoundRect(carScreenX, carScreenY, CAR_RENDER_WIDTH, CAR_RENDER_HEIGHT, CAR_ARC_RADIUS, CAR_ARC_RADIUS);
+
+
         g2d.setColor(Color.WHITE);
-        g2d.setFont(infoFont);
-        g2d.drawString(String.format("Время: %.2f c", currentTime), 10, 20);
-        g2d.drawString("Машин: " + (currentRoad != null && currentRoad.getCars() != null ? currentRoad.getCars().size() : 0), 10, 35);
-        if (currentRoad != null) {
-            g2d.drawString("Дорога: " + currentRoad.getType() + ", " +
-                    (currentRoad.getNumberOfDirections() == 1 ? "1-стор., " : "2-стор., ") +
-                    currentRoad.getNumberOfLanes()/currentRoad.getNumberOfDirections() + " полос/напр.", 10, 50);
+        g2d.setFont(new Font("SansSerif", Font.BOLD, 10));
+        String speedText = String.format("%.0f", car.getCurrentSpeed() * 3.6);
+        FontMetrics fm = g2d.getFontMetrics();
+        g2d.drawString(speedText,
+                carScreenX + CAR_RENDER_WIDTH / 2 - fm.stringWidth(speedText) / 2,
+                carScreenY + CAR_RENDER_HEIGHT / 2 + fm.getAscent() / 2 - 2);
+    }
+
+    private void drawInfoPanel(Graphics2D g2d) {
+        g2d.setColor(new Color(0,0,0,150));
+        g2d.fillRect(5,5, 250, 50);
+        g2d.setColor(Color.WHITE);
+        g2d.setFont(new Font("Arial", Font.PLAIN, 12));
+
+        String simTimeStr = String.format("Время: %.1f c", simulationTime);
+        String carCountStr = "Машин: " + (road.getCars() != null ? road.getCars().size() : 0);
+        String roadInfoStr;
+        if (road.getType() == RoadType.TUNNEL) {
+            roadInfoStr = "Дорога: " + road.getType() + " (реверс.)";
+        } else {
+            int lanesPerDirInfo;
+            if (road.getNumberOfDirections() > 0 && road.getNumberOfLanes() > 0) {
+                lanesPerDirInfo = road.getNumberOfLanes() / road.getNumberOfDirections();
+            } else {
+                lanesPerDirInfo = road.getNumberOfLanes();
+            }
+            if (lanesPerDirInfo == 0) lanesPerDirInfo = 1;
+            roadInfoStr = "Дорога: " + road.getType() + ", " +
+                    (road.getNumberOfDirections() == 1 ? "1-стор." : "2-стор.") + ", " +
+                    lanesPerDirInfo + " п./напр.";
         }
+        g2d.drawString(simTimeStr, 10, 20);
+        g2d.drawString(carCountStr, 10, 35);
+        g2d.drawString(roadInfoStr, 10, 50);
     }
 }
