@@ -18,7 +18,7 @@ public class TrafficFlowGenerator {
     private double timeSinceLastDeterministicCar = 0.0;
 
     private static final double MIN_SPAWN_CLEARANCE_M = 7.0;
-    private static final int MAX_SPAWN_LANE_ATTEMPTS = 3;
+    private static final int MAX_SPAWN_LANE_ATTEMPTS = 3; // Попытки найти свободную полосу для детерминированного потока
     private static final boolean DETAILED_LOGGING = true;
 
 
@@ -28,106 +28,121 @@ public class TrafficFlowGenerator {
         this.random = new Random(System.currentTimeMillis());
         resetGenerationTimers();
         if (DETAILED_LOGGING) {
-            System.out.println("TrafficFlowGenerator создан. Начальные таймеры сброшены.");
-            System.out.println("  isRandomTimeFlow: " + params.isRandomTimeFlow() + ", isRandomSpeedFlow: " + params.isRandomSpeedFlow());
-            System.out.println("  Dir0 next car in: " + String.format("%.2f", timeToNextRandomCarDir0));
-            System.out.println("  Dir1 next car in: " + String.format("%.2f", timeToNextRandomCarDir1));
+            System.out.println("TrafficFlowGenerator создан. Тип дороги: " + road.getType() +
+                    ", Направления: " + params.getNumberOfDirections() +
+                    ", Полос на направление: " + params.getLanesPerDirection());
         }
     }
 
     private void resetGenerationTimers() {
-        timeSinceLastDeterministicCar = 0.0;
+        timeSinceLastDeterministicCar = 0.0; // Сбрасываем таймер для детерминированного потока
         if (params.isRandomTimeFlow()) {
             this.timeToNextRandomCarDir0 = generateNextRandomInterval();
-            if (params.getNumberOfDirections() == 2) {
+            // Для второго направления таймер инициализируется, только если оно есть и это не тоннель
+            // (для тоннеля генерация управляется tunnelState)
+            if (params.getNumberOfDirections() == 2 && road.getType() != RoadType.TUNNEL) {
                 this.timeToNextRandomCarDir1 = generateNextRandomInterval();
             } else {
-                this.timeToNextRandomCarDir1 = Double.POSITIVE_INFINITY;
+                this.timeToNextRandomCarDir1 = Double.POSITIVE_INFINITY; // Нет генерации для второго направления
             }
         } else {
+            // Если поток времени детерминированный, таймеры случайной генерации не используются
             this.timeToNextRandomCarDir0 = Double.POSITIVE_INFINITY;
             this.timeToNextRandomCarDir1 = Double.POSITIVE_INFINITY;
+        }
+        if (DETAILED_LOGGING) {
+            System.out.println("  TrafficFlowGenerator: Таймеры сброшены. Dir0 next car in: " + String.format("%.2f", timeToNextRandomCarDir0) +
+                    ", Dir1 next car in: " + String.format("%.2f", timeToNextRandomCarDir1));
         }
     }
 
     public Car[] generateCars(double deltaTime, TunnelControlState tunnelState) {
         Car carDir0 = null;
         Car carDir1 = null;
-        List<Car> existingCars = road.getCars();
+        List<Car> existingCars = road.getCars(); // Получаем текущие машины для проверки клиренса
 
+        // Определяем, разрешен ли спавн для каждого направления
         boolean allowSpawnDir0 = true;
-        boolean allowSpawnDir1 = true;
+        boolean allowSpawnDir1 = (road.getNumberOfDirections() == 2); // По умолчанию разрешен, если есть второе направление
 
-        if (params.getRoadType() == RoadType.TUNNEL && tunnelState != null) {
+        if (road.getType() == RoadType.TUNNEL && tunnelState != null) {
             allowSpawnDir0 = (tunnelState == TunnelControlState.DIR0_GREEN);
             allowSpawnDir1 = (tunnelState == TunnelControlState.DIR1_GREEN);
+            if (DETAILED_LOGGING && (allowSpawnDir0 || allowSpawnDir1)) {
+                // System.out.println("Tunnel State: " + tunnelState + ", Allow0: " + allowSpawnDir0 + ", Allow1: " + allowSpawnDir1);
+            }
         }
 
-        if (params.isRandomTimeFlow()) {
+
+        if (params.isRandomTimeFlow()) { // Случайное ВРЕМЯ появления
             if (allowSpawnDir0) {
                 timeToNextRandomCarDir0 -= deltaTime;
                 if (timeToNextRandomCarDir0 <= 0) {
-                    int targetLaneDir0 = random.nextInt(params.getLanesPerDirection());
+                    int targetLaneDir0 = random.nextInt(params.getLanesPerDirection()); // Локальный индекс полосы 0, 1...
                     if (isSpawnPointClear(0, targetLaneDir0, existingCars)) {
                         carDir0 = createNewCar(0, targetLaneDir0);
                         double nextInterval = generateNextRandomInterval();
-                        timeToNextRandomCarDir0 = nextInterval + timeToNextRandomCarDir0;
-                        if (DETAILED_LOGGING && carDir0 != null) System.out.println("RandomTime Car Dir0 Spawned. Next in: " + String.format("%.2f",timeToNextRandomCarDir0) + "s (interval: " + String.format("%.2f",nextInterval) + "s)");
+                        timeToNextRandomCarDir0 = nextInterval + timeToNextRandomCarDir0; // Добавляем остаток, чтобы не терять точность
+                        if (DETAILED_LOGGING && carDir0 != null) System.out.println("RandomTime Car Dir0 Spawned (Lane " + targetLaneDir0 +"). Next in: " + String.format("%.2f",timeToNextRandomCarDir0) + "s (Interval: "+ String.format("%.2f",nextInterval) +")");
                     } else {
-                        timeToNextRandomCarDir0 = Math.max(0.2, timeToNextRandomCarDir0 + 0.2);
-                        if (DETAILED_LOGGING) System.out.println("Spawn Dir0 clear check failed (Random). Deferring. Next try in: " + String.format("%.2f",timeToNextRandomCarDir0) + "s");
+                        timeToNextRandomCarDir0 = Math.max(0.1, timeToNextRandomCarDir0 + 0.1); // Небольшая задержка, если место занято
+                        // if (DETAILED_LOGGING) System.out.println("Spawn Dir0 clear check failed (Random). Deferring. Next try in: " + String.format("%.2f",timeToNextRandomCarDir0) + "s");
                     }
                 }
             }
-            if (params.getNumberOfDirections() == 2 && allowSpawnDir1) {
+
+            if (allowSpawnDir1) {
                 timeToNextRandomCarDir1 -= deltaTime;
                 if (timeToNextRandomCarDir1 <= 0) {
-                    int targetLaneDir1 = params.getLanesPerDirection() + random.nextInt(params.getLanesPerDirection());
-                    if (isSpawnPointClear(1, targetLaneDir1, existingCars)) {
-                        carDir1 = createNewCar(1, targetLaneDir1);
+                    int localLaneIndex = random.nextInt(params.getLanesPerDirection());
+                    int globalLaneIndexDir1 = params.getLanesPerDirection() + localLaneIndex; // Глобальный индекс полосы
+                    if (isSpawnPointClear(1, globalLaneIndexDir1, existingCars)) {
+                        carDir1 = createNewCar(1, globalLaneIndexDir1);
                         double nextInterval = generateNextRandomInterval();
                         timeToNextRandomCarDir1 = nextInterval + timeToNextRandomCarDir1;
-                        if (DETAILED_LOGGING && carDir1 != null) System.out.println("RandomTime Car Dir1 Spawned. Next in: " + String.format("%.2f",timeToNextRandomCarDir1) + "s (interval: " + String.format("%.2f",nextInterval) + "s)");
+                        if (DETAILED_LOGGING && carDir1 != null) System.out.println("RandomTime Car Dir1 Spawned (Lane " + globalLaneIndexDir1 + "). Next in: " + String.format("%.2f",timeToNextRandomCarDir1) + "s (Interval: "+ String.format("%.2f",nextInterval) +")");
                     } else {
-                        timeToNextRandomCarDir1 = Math.max(0.2, timeToNextRandomCarDir1 + 0.2);
-                        if (DETAILED_LOGGING) System.out.println("Spawn Dir1 clear check failed (Random). Deferring. Next try in: " + String.format("%.2f",timeToNextRandomCarDir1) + "s");
+                        timeToNextRandomCarDir1 = Math.max(0.1, timeToNextRandomCarDir1 + 0.1);
+                        // if (DETAILED_LOGGING) System.out.println("Spawn Dir1 clear check failed (Random). Deferring. Next try in: " + String.format("%.2f",timeToNextRandomCarDir1) + "s");
                     }
                 }
             }
-        } else { // Детерминированное ВРЕМЯ
+        } else { // Детерминированное ВРЕМЯ появления
             timeSinceLastDeterministicCar += deltaTime;
             double requiredInterval = params.getDeterministicIntervalSeconds();
+
             if (requiredInterval > 0 && timeSinceLastDeterministicCar >= requiredInterval) {
-                boolean carCreatedThisTick = false;
+                boolean carCreatedThisTick = false; // Флаг, что хотя бы одна машина создана в этот тик
                 if (allowSpawnDir0) {
                     for (int attempt = 0; attempt < MAX_SPAWN_LANE_ATTEMPTS && carDir0 == null; attempt++) {
                         int targetLaneDir0Det = random.nextInt(params.getLanesPerDirection());
                         if (isSpawnPointClear(0, targetLaneDir0Det, existingCars)) {
                             carDir0 = createNewCar(0, targetLaneDir0Det);
-                            if (DETAILED_LOGGING && carDir0 != null) System.out.println("DeterministicTime Car Dir0 Spawned.");
+                            if (DETAILED_LOGGING && carDir0 != null) System.out.println("DeterministicTime Car Dir0 Spawned (Lane " + targetLaneDir0Det + ")");
                             carCreatedThisTick = true;
-                        } else {
-                            if (DETAILED_LOGGING) System.out.println("Spawn Dir0 clear check failed (Deterministic attempt " + (attempt+1) + ")");
+                            break; // Выходим из попыток, если успешно
                         }
                     }
                 }
-                if (params.getNumberOfDirections() == 2 && allowSpawnDir1) {
+                if (allowSpawnDir1) {
                     for (int attempt = 0; attempt < MAX_SPAWN_LANE_ATTEMPTS && carDir1 == null; attempt++) {
-                        int targetLaneDir1Det = params.getLanesPerDirection() + random.nextInt(params.getLanesPerDirection());
+                        int localLaneIndex = random.nextInt(params.getLanesPerDirection());
+                        int targetLaneDir1Det = params.getLanesPerDirection() + localLaneIndex;
                         if (isSpawnPointClear(1, targetLaneDir1Det, existingCars)) {
                             carDir1 = createNewCar(1, targetLaneDir1Det);
-                            if (DETAILED_LOGGING && carDir1 != null) System.out.println("DeterministicTime Car Dir1 Spawned.");
+                            if (DETAILED_LOGGING && carDir1 != null) System.out.println("DeterministicTime Car Dir1 Spawned (Lane " + targetLaneDir1Det + ")");
                             carCreatedThisTick = true;
-                        } else {
-                            if (DETAILED_LOGGING) System.out.println("Spawn Dir1 clear check failed (Deterministic attempt " + (attempt+1) + ")");
+                            break;
                         }
                     }
                 }
+
                 if (carCreatedThisTick) {
-                    timeSinceLastDeterministicCar -= requiredInterval;
-                } else if (allowSpawnDir0 || (params.getNumberOfDirections() == 2 && allowSpawnDir1)) {
-                    // Если должны были сгенерировать, но не смогли, откладываем немного, чтобы не застрять
-                    timeSinceLastDeterministicCar = requiredInterval - 0.2;
+                    timeSinceLastDeterministicCar -= requiredInterval; // Сбрасываем таймер кратно интервалу
+                } else if (allowSpawnDir0 || allowSpawnDir1) {
+                    // Если должны были, но не смогли (все полосы заняты), не сбрасываем полностью,
+                    // а даем шанс в ближайшее время.
+                    timeSinceLastDeterministicCar = Math.max(0, requiredInterval - 0.1);
                 }
             }
         }
@@ -138,19 +153,18 @@ public class TrafficFlowGenerator {
         return null;
     }
 
-    private boolean isSpawnPointClear(int direction, int targetLane, List<Car> existingCars) {
-        if (existingCars == null || road == null) return true; // Если нет машин или дороги, то свободно
-        double spawnPosition = (direction == 0) ? 0.0 : road.getLength();
+    private boolean isSpawnPointClear(int direction, int targetGlobalLaneIndex, List<Car> existingCars) {
+        if (existingCars == null || road == null) return true;
+        // double spawnPosition = (direction == 0) ? 0.0 : road.getLength(); // Не используется напрямую
         for (Car car : existingCars) {
-            if (car.getLaneIndex() == targetLane && car.getDirection() == direction) {
+            // Проверяем только машины на той же полосе и в том же направлении
+            if (car.getLaneIndex() == targetGlobalLaneIndex && car.getDirection() == direction) {
                 if (direction == 0) { // Машина появляется на 0, едет вправо
-                    // Если существующая машина (ее передний бампер) находится близко к 0
-                    if (car.getPosition() < MIN_SPAWN_CLEARANCE_M) {
+                    if (car.getPosition() < MIN_SPAWN_CLEARANCE_M) { // Если существующая машина близко к началу
                         return false;
                     }
                 } else { // Машина появляется на road.getLength(), едет влево
-                    // Если существующая машина (ее передний бампер) находится близко к road.getLength()
-                    if ((road.getLength() - car.getPosition()) < MIN_SPAWN_CLEARANCE_M) {
+                    if ((road.getLength() - car.getPosition()) < MIN_SPAWN_CLEARANCE_M) { // Если существующая машина близко к концу (с ее стороны)
                         return false;
                     }
                 }
@@ -160,7 +174,7 @@ public class TrafficFlowGenerator {
     }
 
     private double generateNextRandomInterval() {
-        double interval = 10.0;
+        double interval = 10.0; // Дефолтное значение на случай ошибки
         DistributionLaw law = params.getTimeDistributionLaw();
         if (law == null) law = DistributionLaw.NORMAL; // Безопасное значение по умолчанию
 
@@ -170,79 +184,92 @@ public class TrafficFlowGenerator {
                         (params.getTimeUniformMaxSec() - params.getTimeUniformMinSec()) * random.nextDouble();
                 break;
             case NORMAL:
-                double sigmaTime = Math.sqrt(Math.max(0, params.getTimeNormalVarianceSec()));
+                double sigmaTime = Math.sqrt(Math.max(0.001, params.getTimeNormalVarianceSec())); // Дисперсия не < 0
                 interval = params.getTimeNormalMeanSec() + sigmaTime * random.nextGaussian();
                 break;
             case EXPONENTIAL:
                 double intensityTime = params.getTimeExponentialIntensityPerSec();
-                if (intensityTime <= 0.00001) return Double.POSITIVE_INFINITY;
+                if (intensityTime <= 1e-5) return Double.POSITIVE_INFINITY; // Избегаем деления на ноль
                 double meanExpInterval = 1.0 / intensityTime;
-                interval = -meanExpInterval * Math.log(Math.max(0.00001, 1.0 - random.nextDouble()));
-                break;
-            default:
-                System.err.println("TrafficFlowGenerator: Неизвестный закон распределения времени: " + law + ". Используется fallback интервал.");
+                interval = -meanExpInterval * Math.log(Math.max(1e-9, 1.0 - random.nextDouble())); // Избегаем log(0) и log(1)
                 break;
         }
-        interval = Math.max(0.2, interval);
-        if (DETAILED_LOGGING) System.out.printf("Generated next time interval: %.2fs (Law: %s)\n", interval, law);
-        return interval;
+        return Math.max(0.1, interval); // Минимальный интервал, чтобы не было слишком часто
     }
 
-    private double generateRandomInitialSpeedKmh() {
-        double speedKmh = params.getDeterministicSpeedKmh();
-        DistributionLaw law = params.getSpeedDistributionLaw();
-        if (law == null) law = DistributionLaw.NORMAL; // Безопасное значение по умолчанию
-
-        switch (law) {
-            case UNIFORM:
-                speedKmh = params.getSpeedUniformMinKmh() +
-                        (params.getSpeedUniformMaxKmh() - params.getSpeedUniformMinKmh()) * random.nextDouble();
-                break;
-            case NORMAL:
-                double sigmaSpeed = Math.sqrt(Math.max(0, params.getSpeedNormalVarianceKmh()));
-                speedKmh = params.getSpeedNormalMeanKmh() + sigmaSpeed * random.nextGaussian();
-                break;
-            case EXPONENTIAL:
-                double intensitySpeed = params.getSpeedExponentialIntensityPerKmh();
-                if (intensitySpeed <= 0.00001) {
-                    speedKmh = params.getDeterministicSpeedKmh();
-                    break;
-                }
-                double meanExpSpeed = 1.0 / intensitySpeed;
-                speedKmh = -meanExpSpeed * Math.log(Math.max(0.00001, 1.0 - random.nextDouble()));
-                break;
-            default:
-                System.err.println("TrafficFlowGenerator: Неизвестный закон распределения скорости: " + law + ". Используется fallback скорость.");
-                break;
-        }
-        speedKmh = Math.max(20.0, Math.min(speedKmh, 130.0));
-        if (DETAILED_LOGGING) System.out.printf("  Generated initial random speed: %.2f km/h (Law: %s)\n", speedKmh, law);
-        return speedKmh;
-    }
-
-    private Car createNewCar(int direction, int targetLaneIndex) {
-        double initialPosition = (direction == 0) ? 0.0 : road.getLength();
-        double initialSpeedKmh;
-
+    private double generateInitialSpeedKmhBasedOnSettings() {
+        double speedKmh;
         if (params.isRandomSpeedFlow()) {
-            initialSpeedKmh = generateRandomInitialSpeedKmh();
+            DistributionLaw law = params.getSpeedDistributionLaw();
+            if (law == null) law = DistributionLaw.NORMAL;
+
+            switch (law) {
+                case UNIFORM:
+                    speedKmh = params.getSpeedUniformMinKmh() +
+                            (params.getSpeedUniformMaxKmh() - params.getSpeedUniformMinKmh()) * random.nextDouble();
+                    break;
+                case NORMAL:
+                    double sigmaSpeed = Math.sqrt(Math.max(0.001, params.getSpeedNormalVarianceKmh()));
+                    speedKmh = params.getSpeedNormalMeanKmh() + sigmaSpeed * random.nextGaussian();
+                    break;
+                case EXPONENTIAL:
+                    double intensitySpeed = params.getSpeedExponentialIntensityPerKmh();
+                    if (intensitySpeed <= 1e-5) {
+                        speedKmh = params.getDeterministicSpeedKmh(); // Fallback
+                    } else {
+                        double meanExpSpeed = 1.0 / intensitySpeed;
+                        speedKmh = -meanExpSpeed * Math.log(Math.max(1e-9, 1.0 - random.nextDouble()));
+                    }
+                    break;
+                default:
+                    speedKmh = params.getDeterministicSpeedKmh(); // Fallback
+                    break;
+            }
         } else {
-            initialSpeedKmh = params.getDeterministicSpeedKmh();
-            if (DETAILED_LOGGING) System.out.printf("  Car (dir %d, lane %d) generated DETERMINISTIC speed: %.2f km/h%n", direction, targetLaneIndex, initialSpeedKmh);
+            speedKmh = params.getDeterministicSpeedKmh();
+        }
+        // Это предварительная скорость, она будет скорректирована по типу дороги
+        return Math.max(10.0, Math.min(speedKmh, 150.0)); // Общий разумный диапазон
+    }
+
+    private Car createNewCar(int direction, int targetGlobalLaneIndex) {
+        double initialPosition = (direction == 0) ? 0.0 : road.getLength();
+        RoadType currentRoadType = road.getType();
+
+        double generatedSpeedKmh = generateInitialSpeedKmhBasedOnSettings();
+
+        // Корректируем сгенерированную скорость в соответствии с лимитами типа дороги
+        double minRoadTypeSpeedKmh = currentRoadType.getMinSpeedLimitKmh();
+        double maxRoadTypeSpeedKmh = currentRoadType.getMaxSpeedLimitKmh();
+
+        double initialSpeedKmh = Math.max(minRoadTypeSpeedKmh, Math.min(generatedSpeedKmh, maxRoadTypeSpeedKmh));
+
+        if (DETAILED_LOGGING) {
+            System.out.printf("  Car (dir %d, lane %d, type %s): GeneratedRawSpeed=%.1f, RoadLimits[%.1f-%.1f], FinalInitialSpeed=%.1f km/h%n",
+                    direction, targetGlobalLaneIndex, currentRoadType, generatedSpeedKmh, minRoadTypeSpeedKmh, maxRoadTypeSpeedKmh, initialSpeedKmh);
         }
 
         double initialSpeedMs = initialSpeedKmh / 3.6;
-        double maxSpeedMs = initialSpeedMs * (1.1 + random.nextDouble() * 0.3);
-        maxSpeedMs = Math.max(initialSpeedMs, Math.min(maxSpeedMs, 160.0/3.6));
-        double accelP = 1.8 + random.nextDouble() * 1.2;
-        double decelP = 2.5 + random.nextDouble() * 1.5;
 
-        return new Car(initialPosition, initialSpeedMs, maxSpeedMs, accelP, decelP, targetLaneIndex, direction);
+        // Максимальная скорость машины также должна быть в пределах лимитов дороги,
+        // но может быть немного выше начальной (например, если машина хочет ускориться)
+        // Убедимся, что maxCarSpeedKmh не выходит за пределы maxRoadTypeSpeedKmh
+        double maxCarSpeedKmh = Math.min(initialSpeedKmh * (1.05 + random.nextDouble() * 0.20), maxRoadTypeSpeedKmh); // Разброс 5-25% от начальной
+        maxCarSpeedKmh = Math.max(initialSpeedKmh, maxCarSpeedKmh); // Не меньше начальной
+        maxCarSpeedKmh = Math.min(maxCarSpeedKmh, currentRoadType.getMaxSpeedLimitKmh()); // И не больше лимита дороги
+
+        double maxSpeedMs = maxCarSpeedKmh / 3.6;
+
+        // Параметры ускорения/замедления (можно сделать более разнообразными)
+        double accelParam = 1.5 + random.nextDouble() * 1.0;  // [1.5 - 2.5] м/с^2
+        double decelParam = 2.0 + random.nextDouble() * 1.5;  // [2.0 - 3.5] м/с^2
+
+        return new Car(initialPosition, initialSpeedMs, maxSpeedMs, accelParam, decelParam, targetGlobalLaneIndex, direction);
     }
 
     public void updateParameters(SimulationParameters newParams) {
-        // this.params = newParams; // Не нужно, params это ссылка на тот же объект, что и в SimulationEngine
-        System.out.println("TrafficFlowGenerator.updateParameters -> сброс таймеров генерации.");
+        // this.params = newParams; // Если params - это ссылка на тот же объект, что и в SimulationEngine, это не нужно
+        if (DETAILED_LOGGING) System.out.println("TrafficFlowGenerator.updateParameters -> сброс таймеров генерации. Новый тип дороги: " + road.getType());
         resetGenerationTimers(); // Переинициализируем таймеры на основе текущих (уже обновленных) params
     }
 }

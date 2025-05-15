@@ -2,13 +2,14 @@ package com.trafficsimulation.gui;
 
 import com.trafficsimulation.model.Car;
 import com.trafficsimulation.model.Road;
+import com.trafficsimulation.model.RoadSign;
+import com.trafficsimulation.model.RoadSignType;
 import com.trafficsimulation.model.RoadType;
 import com.trafficsimulation.model.TrafficLight;
 import com.trafficsimulation.model.TrafficLightState;
 
 import javax.swing.*;
 import java.awt.*;
-// import java.util.List; // Не используется напрямую здесь
 
 public class SimulationPanel extends JPanel {
 
@@ -23,13 +24,20 @@ public class SimulationPanel extends JPanel {
     private static final Color LANE_SEPARATOR_COLOR = Color.YELLOW;
     private static final Color GRASS_COLOR = new Color(34, 139, 34);
 
-    private static final int TRAFFIC_LIGHT_VISUAL_WIDTH = 20; // Уменьшил для более аккуратного вида без коробки
+    private static final int TRAFFIC_LIGHT_VISUAL_WIDTH = 20;
     private static final int TRAFFIC_LIGHT_POLE_HEIGHT = 30;
     private static final Color TRAFFIC_LIGHT_POLE_COLOR = Color.DARK_GRAY;
 
-    private static final int CAR_RENDER_WIDTH = 30;  // Ширина машинки
-    private static final int CAR_RENDER_HEIGHT = 16; // Высота машинки
-    private static final int CAR_ARC_RADIUS = 8;     // Скругление углов машинки
+    private static final int CAR_RENDER_WIDTH = 30;
+    private static final int CAR_RENDER_HEIGHT = 16;
+    private static final int CAR_ARC_RADIUS = 8;
+
+    private static final int ROAD_SIGN_SIZE = 24;
+    private static final int ROAD_SIGN_POLE_HEIGHT = 30;
+    private static final Color ROAD_SIGN_POLE_COLOR = Color.DARK_GRAY;
+    private static final Color ROAD_SIGN_BG_COLOR = Color.WHITE;
+    private static final Color ROAD_SIGN_BORDER_COLOR = Color.RED;
+    private static final Color ROAD_SIGN_TEXT_COLOR = Color.BLACK;
 
 
     public SimulationPanel() {
@@ -71,6 +79,7 @@ public class SimulationPanel extends JPanel {
             return;
         }
 
+        // Эту переменную теперь передаем в методы отрисовки
         int roadY = getHeight() / 2 - ROAD_RENDER_HEIGHT / 2;
         drawRoadSurface(g2d, roadY);
 
@@ -84,11 +93,10 @@ public class SimulationPanel extends JPanel {
             int panelWidth = getWidth();
             for (TrafficLight light : road.getTrafficLights()) {
                 int lightScreenX;
-                int lightScreenY = roadY - (TRAFFIC_LIGHT_VISUAL_WIDTH) - 5; // Y для светофора над дорогой (с учетом диаметра сигнала)
+                int lightScreenY_signal_top = roadY - TRAFFIC_LIGHT_VISUAL_WIDTH - 5;
                 if (light.getTargetDirection() == 1 && road.getType() != RoadType.TUNNEL && road.getNumberOfDirections() == 2) {
-                    lightScreenY = roadY + ROAD_RENDER_HEIGHT + 5 + TRAFFIC_LIGHT_POLE_HEIGHT; // Y для светофора под дорогой
+                    lightScreenY_signal_top = roadY + ROAD_RENDER_HEIGHT + 5;
                 }
-
 
                 double roadModelLength = road.getLength();
                 if (roadModelLength > 0) {
@@ -98,15 +106,34 @@ public class SimulationPanel extends JPanel {
                 } else {
                     lightScreenX = 10;
                 }
-                drawTrafficLight(g2d, light, lightScreenX, lightScreenY);
+                drawTrafficLight(g2d, light, lightScreenX, lightScreenY_signal_top, roadY); // Передаем roadY
+            }
+        }
+
+        if (road.getRoadSigns() != null && !road.getRoadSigns().isEmpty()){
+            int panelWidth = getWidth();
+            for (RoadSign sign : road.getRoadSigns()) {
+                int signScreenX;
+                int signScreenY_top = roadY - ROAD_SIGN_SIZE - 5;
+                if (sign.getTargetDirection() == 1 && road.getNumberOfDirections() == 2 && road.getType() != RoadType.TUNNEL) {
+                    signScreenY_top = roadY + ROAD_RENDER_HEIGHT + 5;
+                }
+                double roadModelLength = road.getLength();
+                if (roadModelLength > 0) {
+                    signScreenX = (int) ((sign.getPosition() / roadModelLength) * panelWidth);
+                    signScreenX -= ROAD_SIGN_SIZE / 2;
+                    signScreenX = Math.max(0, Math.min(signScreenX, panelWidth - ROAD_SIGN_SIZE));
+                } else {
+                    signScreenX = 20;
+                }
+                drawRoadSign(g2d, sign, signScreenX, signScreenY_top, roadY); // Передаем roadY
             }
         }
         drawInfoPanel(g2d);
-
         if (placementModeActive && placementHint != null) {
             g2d.setColor(new Color(0,0,200, 200));
             g2d.setFont(new Font("Arial", Font.BOLD, 14));
-            String hintText = "РЕЖИМ: " + placementHint + ". Кликните на дорогу для размещения.";
+            String hintText = "РЕЖИМ: " + placementHint + ". Кликните на дорогу.";
             FontMetrics fm = g2d.getFontMetrics();
             int textWidth = fm.stringWidth(hintText);
             g2d.fillRect(getWidth() / 2 - textWidth / 2 - 10, getHeight() - 65 - fm.getAscent(), textWidth + 20, fm.getHeight() + 5);
@@ -119,7 +146,6 @@ public class SimulationPanel extends JPanel {
         g2d.setColor(ROAD_COLOR);
         g2d.fillRect(0, roadY, getWidth(), ROAD_RENDER_HEIGHT);
         g2d.setColor(LANE_SEPARATOR_COLOR);
-
         int lanesPerDirection;
         if (road.getNumberOfDirections() > 0 && road.getNumberOfLanes() > 0) {
             lanesPerDirection = road.getNumberOfLanes() / road.getNumberOfDirections();
@@ -127,7 +153,6 @@ public class SimulationPanel extends JPanel {
             lanesPerDirection = road.getNumberOfLanes();
         }
         if (lanesPerDirection == 0) lanesPerDirection = 1;
-
         int numLanesTotalOnScreen = road.getNumberOfLanes();
         if (numLanesTotalOnScreen == 0) numLanesTotalOnScreen = 1;
         int laneVisualHeight = ROAD_RENDER_HEIGHT / numLanesTotalOnScreen;
@@ -156,64 +181,44 @@ public class SimulationPanel extends JPanel {
         g2d.drawLine(0, roadY + ROAD_RENDER_HEIGHT, getWidth(), roadY + ROAD_RENDER_HEIGHT);
     }
 
-    private void drawTrafficLight(Graphics2D g2d, TrafficLight light, int screenX, int screenY_base_of_signal) {
-        // screenY_base_of_signal - это Y координата, где должен начаться сам СИГНАЛ (круг)
-        int signalDiameter = TRAFFIC_LIGHT_VISUAL_WIDTH; // Диаметр сигнала равен ширине "светофора"
+    // ИЗМЕНЕНА СИГНАТУРА: добавлен параметр roadY
+    private void drawTrafficLight(Graphics2D g2d, TrafficLight light, int screenX, int screenY_signal_top, int roadY) {
+        int signalDiameter = TRAFFIC_LIGHT_VISUAL_WIDTH;
         int signalRadius = signalDiameter / 2;
-
-        // Координаты верхнего левого угла овала сигнала
-        int signalOvalX = screenX;
-        int signalOvalY = screenY_base_of_signal;
-
-
-        // Столб
         g2d.setColor(TRAFFIC_LIGHT_POLE_COLOR);
-        int poleX = screenX + signalRadius - 2; // Центрируем столб под сигналом
-        if (screenY_base_of_signal < getHeight() / 2) { // Светофор над дорогой
-            g2d.fillRect(poleX, signalOvalY + signalDiameter, 4, TRAFFIC_LIGHT_POLE_HEIGHT);
-        } else { // Светофор под дорогой
-            g2d.fillRect(poleX, signalOvalY - TRAFFIC_LIGHT_POLE_HEIGHT, 4, TRAFFIC_LIGHT_POLE_HEIGHT);
-        }
-
-        // Сам сигнал (без корпуса)
-        Color signalColor;
-        if (light.getCurrentState() == TrafficLightState.GREEN) {
-            signalColor = Color.GREEN.brighter();
-        } else if (light.getCurrentState() == TrafficLightState.RED) {
-            signalColor = Color.RED.brighter();
+        int poleX = screenX + signalRadius - 2;
+        if (screenY_signal_top < roadY) { // Сравниваем с переданным roadY
+            g2d.fillRect(poleX, screenY_signal_top + signalDiameter, 4, TRAFFIC_LIGHT_POLE_HEIGHT);
         } else {
-            signalColor = Color.GRAY;
+            g2d.fillRect(poleX, screenY_signal_top - TRAFFIC_LIGHT_POLE_HEIGHT, 4, TRAFFIC_LIGHT_POLE_HEIGHT);
         }
+        Color signalColor;
+        if (light.getCurrentState() == TrafficLightState.GREEN) signalColor = Color.GREEN.brighter();
+        else if (light.getCurrentState() == TrafficLightState.RED) signalColor = Color.RED.brighter();
+        else signalColor = Color.GRAY;
         g2d.setColor(signalColor);
-        g2d.fillOval(signalOvalX, signalOvalY, signalDiameter, signalDiameter);
-
-        // Оставшееся время
-        Color textColor = Color.WHITE;
-        if (light.getCurrentState() == TrafficLightState.GREEN) textColor = Color.BLACK;
-
+        g2d.fillOval(screenX, screenY_signal_top, signalDiameter, signalDiameter);
+        Color textColor = (light.getCurrentState() == TrafficLightState.GREEN) ? Color.BLACK : Color.WHITE;
         g2d.setColor(textColor);
         g2d.setFont(new Font("Arial", Font.BOLD, Math.max(9, signalRadius - 2)));
         String timeText = String.format("%.0f", light.getRemainingTime());
         FontMetrics fm = g2d.getFontMetrics();
         int textWidth = fm.stringWidth(timeText);
         g2d.drawString(timeText,
-                signalOvalX + signalRadius - textWidth / 2,
-                signalOvalY + signalRadius + fm.getAscent() / 2 -1);
+                screenX + signalRadius - textWidth / 2,
+                screenY_signal_top + signalRadius + fm.getAscent() / 2 -1);
     }
-
 
     private void drawCar(Graphics2D g2d, Car car, int roadSurfaceY) {
         double roadModelLength = road.getLength();
         int panelWidth = getWidth();
         int carScreenX;
-
         if (roadModelLength > 0) {
             carScreenX = (int) ((car.getPosition() / roadModelLength) * panelWidth);
         } else {
             carScreenX = (car.getDirection() == 0) ? -CAR_RENDER_WIDTH : panelWidth;
         }
         carScreenX -= CAR_RENDER_WIDTH / 2;
-
         int lanesPerDirVisual;
         if (road.getNumberOfDirections() > 0 && road.getNumberOfLanes() > 0) {
             lanesPerDirVisual = road.getNumberOfLanes() / road.getNumberOfDirections();
@@ -221,29 +226,17 @@ public class SimulationPanel extends JPanel {
             lanesPerDirVisual = road.getNumberOfLanes();
         }
         if (lanesPerDirVisual == 0) lanesPerDirVisual = 1;
-
         int totalLanesOnScreenVisual = road.getNumberOfLanes();
         if(totalLanesOnScreenVisual == 0) totalLanesOnScreenVisual = 1;
         int laneVisualHeight = ROAD_RENDER_HEIGHT / totalLanesOnScreenVisual;
         int carScreenY = roadSurfaceY + (car.getLaneIndex() * laneVisualHeight) + (laneVisualHeight / 2 - CAR_RENDER_HEIGHT / 2);
-
         Color carColor;
-        // Возвращаем цвета как было (или подберите свои)
-        // Например, синий для направления 0 и фиолетовый для направления 1
-        if (car.getDirection() == 0) {
-            carColor = new Color(60, 100, 200); // Более приятный синий
-        } else {
-            carColor = new Color(150, 60, 180); // Фиолетовый
-        }
+        if (car.getDirection() == 0) carColor = new Color(60, 100, 200);
+        else carColor = new Color(150, 60, 180);
         g2d.setColor(carColor);
-        // Рисуем скругленный прямоугольник
         g2d.fillRoundRect(carScreenX, carScreenY, CAR_RENDER_WIDTH, CAR_RENDER_HEIGHT, CAR_ARC_RADIUS, CAR_ARC_RADIUS);
-
-        // Окантовка для лучшей видимости
         g2d.setColor(carColor.darker());
         g2d.drawRoundRect(carScreenX, carScreenY, CAR_RENDER_WIDTH, CAR_RENDER_HEIGHT, CAR_ARC_RADIUS, CAR_ARC_RADIUS);
-
-
         g2d.setColor(Color.WHITE);
         g2d.setFont(new Font("SansSerif", Font.BOLD, 10));
         String speedText = String.format("%.0f", car.getCurrentSpeed() * 3.6);
@@ -258,7 +251,6 @@ public class SimulationPanel extends JPanel {
         g2d.fillRect(5,5, 250, 50);
         g2d.setColor(Color.WHITE);
         g2d.setFont(new Font("Arial", Font.PLAIN, 12));
-
         String simTimeStr = String.format("Время: %.1f c", simulationTime);
         String carCountStr = "Машин: " + (road.getCars() != null ? road.getCars().size() : 0);
         String roadInfoStr;
@@ -279,5 +271,43 @@ public class SimulationPanel extends JPanel {
         g2d.drawString(simTimeStr, 10, 20);
         g2d.drawString(carCountStr, 10, 35);
         g2d.drawString(roadInfoStr, 10, 50);
+    }
+
+    // ИЗМЕНЕНА СИГНАТУРА: добавлен параметр roadY
+    private void drawRoadSign(Graphics2D g2d, RoadSign sign, int screenX, int screenY_sign_top, int roadY) {
+        g2d.setColor(ROAD_SIGN_POLE_COLOR);
+        int poleX = screenX + ROAD_SIGN_SIZE / 2 - 2;
+        if (screenY_sign_top < roadY) { // Сравниваем с переданным roadY
+            g2d.fillRect(poleX, screenY_sign_top + ROAD_SIGN_SIZE, 4, ROAD_SIGN_POLE_HEIGHT);
+        } else {
+            g2d.fillRect(poleX, screenY_sign_top - ROAD_SIGN_POLE_HEIGHT, 4, ROAD_SIGN_POLE_HEIGHT);
+        }
+
+        if (sign.getType() == RoadSignType.SPEED_LIMIT) {
+            g2d.setColor(ROAD_SIGN_BG_COLOR);
+            g2d.fillOval(screenX, screenY_sign_top, ROAD_SIGN_SIZE, ROAD_SIGN_SIZE);
+            g2d.setColor(ROAD_SIGN_BORDER_COLOR);
+            g2d.setStroke(new BasicStroke(Math.max(1, ROAD_SIGN_SIZE / 10f)));
+            g2d.drawOval(screenX, screenY_sign_top, ROAD_SIGN_SIZE, ROAD_SIGN_SIZE);
+            g2d.setStroke(new BasicStroke(1));
+            g2d.setColor(ROAD_SIGN_TEXT_COLOR);
+            String text = String.format("%.0f", sign.getSpeedLimitKmh());
+            int fontSize = ROAD_SIGN_SIZE / 2;
+            if (sign.getSpeedLimitKmh() >= 100) fontSize = (int)(ROAD_SIGN_SIZE / 2.3f);
+            else if (sign.getSpeedLimitKmh() < 10) fontSize = (int)(ROAD_SIGN_SIZE / 1.9f); // Было <100, изменил на <10
+            g2d.setFont(new Font("Arial", Font.BOLD, fontSize));
+            FontMetrics fm = g2d.getFontMetrics();
+            int textWidth = fm.stringWidth(text);
+            g2d.drawString(text,
+                    screenX + ROAD_SIGN_SIZE / 2 - textWidth / 2,
+                    screenY_sign_top + ROAD_SIGN_SIZE / 2 + fm.getAscent() / 2 - fm.getDescent() / 3);
+        } else {
+            g2d.setColor(Color.BLUE);
+            g2d.fillRect(screenX, screenY_sign_top, ROAD_SIGN_SIZE, ROAD_SIGN_SIZE);
+            g2d.setColor(Color.WHITE);
+            g2d.setFont(new Font("Arial", Font.BOLD, ROAD_SIGN_SIZE - 8));
+            g2d.drawString("?", screenX + ROAD_SIGN_SIZE/2 - g2d.getFontMetrics().stringWidth("?")/2,
+                    screenY_sign_top + ROAD_SIGN_SIZE/2 + g2d.getFontMetrics().getAscent()/2 - g2d.getFontMetrics().getDescent()/2);
+        }
     }
 }

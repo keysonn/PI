@@ -40,7 +40,7 @@ public class SimulationParameters {
     private double speedUniformMaxKmh = 80.0;
     private double speedNormalMeanKmh = 60.0;
     private double speedNormalVarianceKmh = 10.0;
-    private double speedExponentialIntensityPerKmh = 0.05;
+    private double speedExponentialIntensityPerKmh = 0.02;
 
     // Симуляция
     private double simulationTimeStep = 0.1; // Шаг времени для обновления логики (не отрисовки)

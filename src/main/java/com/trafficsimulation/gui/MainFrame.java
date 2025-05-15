@@ -2,20 +2,22 @@ package com.trafficsimulation.gui;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.List;
 
+import com.trafficsimulation.model.Road;
 import com.trafficsimulation.model.RoadSign;
 import com.trafficsimulation.model.RoadSignType;
+import com.trafficsimulation.model.RoadType;
 import com.trafficsimulation.model.TrafficLight;
 import com.trafficsimulation.model.TrafficLightState;
 import com.trafficsimulation.simulation.SimulationEngine;
 import com.trafficsimulation.simulation.SimulationParameters;
-// Старый SettingsDialog больше не импортируется
+
 
 public class MainFrame extends JFrame {
 
@@ -40,14 +42,16 @@ public class MainFrame extends JFrame {
 
     private static final double MIN_OBJECT_SPACING_METERS = 15.0;
     private static final double MIN_EDGE_SPACING_METERS = 7.5;
+    private static final int ROAD_RENDER_HEIGHT_FOR_CLICK = 80;
+
 
     public MainFrame() {
-        setTitle("Система моделирования движения транспорта v0.9"); // Обновляем версию
+        setTitle("Система моделирования движения транспорта v1.2");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
         setPreferredSize(new Dimension(1000, 700));
 
-        simulationParameters = new SimulationParameters(); // С новыми флагами isRandomSpeedFlow, isRandomTimeFlow
+        simulationParameters = new SimulationParameters();
         simulationPanel = new SimulationPanel();
         simulationEngine = new SimulationEngine(simulationParameters, simulationPanel);
 
@@ -64,52 +68,40 @@ public class MainFrame extends JFrame {
 
         pack();
         setLocationRelativeTo(null);
-        System.out.println("Конструктор MainFrame выполнен, компоненты новой структуры добавлены.");
     }
 
     private JToolBar createTopToolBar() {
         JToolBar toolBar = new JToolBar();
         toolBar.setFloatable(false);
         toolBar.setRollover(true);
-
         roadSettingsButton = new JButton("Параметры автодороги");
         modelingSettingsButton = new JButton("Параметры моделирования");
-
         ImageIcon lightIcon = loadImageIcon("icons/traffic_light_icon.png", "Светофор");
         ImageIcon signIcon = loadImageIcon("icons/road_sign_icon.png", "Знак");
-
         addTrafficLightIconButton = new JButton(lightIcon);
-        addTrafficLightIconButton.setToolTipText("Добавить светофор");
+        addTrafficLightIconButton.setToolTipText("Добавить светофор (макс. 2)");
         if (lightIcon == null) addTrafficLightIconButton.setText("Св");
-
         addRoadSignIconButton = new JButton(signIcon);
         addRoadSignIconButton.setToolTipText("Добавить дорожный знак");
         if (signIcon == null) addRoadSignIconButton.setText("Зн");
-
         helpButton = new JButton("Справка");
-
-        roadSettingsButton.addActionListener(e -> openSpecificRoadSettingsDialog());
-        modelingSettingsButton.addActionListener(e -> openSpecificModelingSettingsDialog());
-
+        roadSettingsButton.addActionListener(e -> openRoadSettingsDialog());
+        modelingSettingsButton.addActionListener(e -> openModelingSettingsDialog());
         addTrafficLightIconButton.addActionListener(e -> {
             if (!canPlaceObject()) return;
-            if (simulationEngine.getRoad().getTrafficLights().size() >= 2) {
+            if (simulationEngine.getRoad() != null && simulationEngine.getRoad().getTrafficLights().size() >= 2) {
                 JOptionPane.showMessageDialog(this, "Достигнут лимит светофоров (макс. 2).", "Лимит", JOptionPane.INFORMATION_MESSAGE);
                 return;
             }
             currentPlacementMode = PlacementMode.ADD_TRAFFIC_LIGHT;
             simulationPanel.setPlacementMode(true, "Светофор");
-            System.out.println("Режим: Добавление светофора. Кликните на дорогу.");
         });
-
         addRoadSignIconButton.addActionListener(e -> {
             if (!canPlaceObject()) return;
             currentPlacementMode = PlacementMode.ADD_ROAD_SIGN;
-            simulationPanel.setPlacementMode(true, "Знак");
-            System.out.println("Режим: Добавление знака. Кликните на дорогу.");
+            simulationPanel.setPlacementMode(true, "Знак огр. скорости");
         });
-        helpButton.addActionListener(e -> showHelpDialog());
-
+        helpButton.addActionListener(e -> showAboutDialog());
         toolBar.add(roadSettingsButton);
         toolBar.add(modelingSettingsButton);
         toolBar.addSeparator(new Dimension(10,0));
@@ -117,7 +109,6 @@ public class MainFrame extends JFrame {
         toolBar.add(addRoadSignIconButton);
         toolBar.add(Box.createHorizontalGlue());
         toolBar.add(helpButton);
-
         return toolBar;
     }
 
@@ -132,7 +123,7 @@ public class MainFrame extends JFrame {
             }
             return icon;
         } else {
-            System.err.println("Не удалось загрузить иконку: " + path + ". Убедитесь, что файл находится в src/main/resources/" + path);
+            System.err.println("Не удалось загрузить иконку: " + path);
             return null;
         }
     }
@@ -140,59 +131,48 @@ public class MainFrame extends JFrame {
     private JPanel createBottomControlPanel() {
         JPanel panel = new JPanel(new BorderLayout(10, 5));
         panel.setBorder(BorderFactory.createEmptyBorder(5,10,5,10));
-
         JPanel speedPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
         speed1xButton = new JToggleButton("1x", true);
         speed2xButton = new JToggleButton("2x");
         speed3xButton = new JToggleButton("3x");
         speedGroup = new ButtonGroup();
         speedGroup.add(speed1xButton); speedGroup.add(speed2xButton); speedGroup.add(speed3xButton);
-
         ActionListener speedListener = e -> {
             double factor = 1.0;
             if (speed2xButton.isSelected()) factor = 2.0;
             else if (speed3xButton.isSelected()) factor = 3.0;
             simulationParameters.setSimulationSpeedFactor(factor);
-            System.out.println("Скорость симуляции установлена на: " + factor + "x");
         };
         speed1xButton.addActionListener(speedListener);
         speed2xButton.addActionListener(speedListener);
         speed3xButton.addActionListener(speedListener);
-
         speedPanel.add(new JLabel("Скорость:"));
         speedPanel.add(speed1xButton);
         speedPanel.add(speed2xButton);
         speedPanel.add(speed3xButton);
-
         JPanel mainControlsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
         runGenerationButton = new JButton("Запустить генерацию!");
         pauseButton = new JButton("Пауза");
         stopButton = new JButton("Стоп");
-
         pauseButton.setEnabled(false);
         stopButton.setEnabled(false);
-
         runGenerationButton.addActionListener(e -> {
-            System.out.println("Нажата кнопка Запустить генерацию!");
             currentPlacementMode = PlacementMode.NONE;
             simulationPanel.setPlacementMode(false, null);
             simulationEngine.startSimulation();
             setBottomControlsEnabledState(false);
             runGenerationButton.setText("Генерация...");
         });
-
         pauseButton.addActionListener(e -> {
-            if (pauseButton.getText().equals("Пауза")) {
+            if (simulationEngine.isRunning() && !simulationEngine.isPaused()) {
                 simulationEngine.pauseSimulation();
                 pauseButton.setText("Продолжить");
-            } else {
+            } else if (simulationEngine.isRunning() && simulationEngine.isPaused()){
                 simulationEngine.resumeSimulation();
                 pauseButton.setText("Пауза");
             }
         });
-
         stopButton.addActionListener(e -> {
-            System.out.println("Нажата кнопка Стоп");
             simulationEngine.stopSimulation();
             setBottomControlsEnabledState(true);
             runGenerationButton.setText("Запустить генерацию!");
@@ -200,11 +180,9 @@ public class MainFrame extends JFrame {
             simulationPanel.setPlacementMode(false, null);
             simulationPanel.updateSimulationState(simulationEngine.getRoad(), simulationEngine.getSimulationTime());
         });
-
         mainControlsPanel.add(pauseButton);
         mainControlsPanel.add(stopButton);
         mainControlsPanel.add(runGenerationButton);
-
         panel.add(speedPanel, BorderLayout.WEST);
         panel.add(mainControlsPanel, BorderLayout.EAST);
         return panel;
@@ -220,8 +198,7 @@ public class MainFrame extends JFrame {
     }
 
     private void handleDialogOpening(){
-        boolean wasRunningAndNotPaused = !runGenerationButton.isEnabled() && pauseButton.getText().equals("Пауза");
-        if (wasRunningAndNotPaused) {
+        if (simulationEngine.isRunning() && !simulationEngine.isPaused()) {
             simulationEngine.pauseSimulation();
             pauseButton.setText("Продолжить");
         }
@@ -230,84 +207,58 @@ public class MainFrame extends JFrame {
     }
 
     private void handleDialogClosing(boolean settingsWereSaved){
-        boolean wasPausedByDialog = !runGenerationButton.isEnabled() && pauseButton.getText().equals("Продолжить");
-
         if (settingsWereSaved) {
-            System.out.println("Настройки сохранены. Применяем...");
-            simulationEngine.stopSimulation();
+            if (simulationEngine.isRunning()) {
+                simulationEngine.stopSimulation();
+            }
             setBottomControlsEnabledState(true);
             runGenerationButton.setText("Запустить генерацию!");
-            simulationEngine.initializeSimulation();
-            simulationPanel.updateSimulationState(simulationEngine.getRoad(), 0);
-            System.out.println("Симуляция переинициализирована с новыми параметрами.");
+            simulationEngine.updateParameters(simulationParameters);
         } else {
-            System.out.println("Настройки не были сохранены.");
-            if (wasPausedByDialog) {
+            if (simulationEngine.isRunning() && pauseButton.getText().equals("Продолжить")) {
                 simulationEngine.resumeSimulation();
                 pauseButton.setText("Пауза");
             }
         }
     }
 
-    private void openSpecificRoadSettingsDialog() {
-        System.out.println("Открытие окна настроек параметров автодороги");
+    private void openRoadSettingsDialog() {
         handleDialogOpening();
-        RoadSettingsDialog roadDlg = new RoadSettingsDialog(MainFrame.this, simulationParameters);
+        RoadSettingsDialog roadDlg = new RoadSettingsDialog(this, simulationParameters);
         boolean settingsWereSaved = roadDlg.showDialog();
         handleDialogClosing(settingsWereSaved);
     }
 
-    private void openSpecificModelingSettingsDialog() {
-        System.out.println("Открытие окна настроек параметров моделирования");
+    private void openModelingSettingsDialog() {
         handleDialogOpening();
-
-        ModelingSettingsDialog modelingDlg = new ModelingSettingsDialog(MainFrame.this, simulationParameters);
+        ModelingSettingsDialog modelingDlg = new ModelingSettingsDialog(this, simulationParameters);
         boolean settingsWereSaved = modelingDlg.showDialog();
-
         handleDialogClosing(settingsWereSaved);
     }
 
     private boolean canPlaceObject(){
         if (simulationEngine.getRoad() == null) {
-            JOptionPane.showMessageDialog(this, "Сначала инициализируйте дорогу (через Настройки или Запуск).", "Ошибка", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Сначала настройте параметры дороги.", "Ошибка", JOptionPane.ERROR_MESSAGE);
             return false;
         }
-        boolean isSimulating = !runGenerationButton.isEnabled();
-        boolean isPausedWaitingResume = pauseButton.isEnabled() && pauseButton.getText().equals("Продолжить");
-        if (isSimulating || isPausedWaitingResume) {
-            if (stopButton.isEnabled()) {
+        if (simulationEngine.isRunning()) {
+            int choice = JOptionPane.showConfirmDialog(this,
+                    "Симуляция активна. Для добавления объектов ее необходимо остановить.\nОстановить симуляцию?",
+                    "Симуляция активна", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+            if (choice == JOptionPane.YES_OPTION) {
                 stopButton.doClick();
             } else {
-                simulationEngine.stopSimulation();
-                setBottomControlsEnabledState(true);
-                runGenerationButton.setText("Запустить генерацию!");
+                currentPlacementMode = PlacementMode.NONE;
+                simulationPanel.setPlacementMode(false, null);
+                return false;
             }
         }
         return true;
     }
 
-    private void showHelpDialog() {
-        JTextArea helpTextArea = new JTextArea(15, 50);
-        helpTextArea.setText("Система моделирования движения транспорта v0.9\n\n" +
-                "Разработчики:\n" +
-                " - Пожидаев Н.А.\n" +
-                " - Адаев Н.О.\n\n" +
-                "Руководитель: Зеленко Л.С.\n" +
-                "Самарский университет, 2025\n\n" +
-                "Инструкция:\n" +
-                "1. Задайте параметры дороги и моделирования через соответствующие кнопки на верхней панели.\n" +
-                "2. Для добавления светофора или знака нажмите соответствующую кнопку-иконку,\n" +
-                "   затем кликните на желаемую позицию на дороге в основном окне.\n" +
-                "3. Используйте кнопки внизу для запуска, паузы, остановки симуляции и выбора скорости.\n" +
-                "4. Максимальное количество светофоров на дороге - 2.\n" +
-                "5. Объекты не могут быть размещены слишком близко друг к другу или к краям дороги.\n"
-        );
-        helpTextArea.setWrapStyleWord(true);
-        helpTextArea.setLineWrap(true);
-        helpTextArea.setEditable(false);
-        helpTextArea.setCaretPosition(0);
-        JScrollPane scrollPane = new JScrollPane(helpTextArea);
-        JOptionPane.showMessageDialog(this, scrollPane, "Справка", JOptionPane.INFORMATION_MESSAGE);
+    private void showAboutDialog() {
+        AboutDialog aboutDialog = new AboutDialog(this);
+        aboutDialog.setVisible(true);
     }
 
     private void addSimulationPanelMouseListener() {
@@ -317,8 +268,20 @@ public class MainFrame extends JFrame {
                 if (currentPlacementMode == PlacementMode.NONE || simulationEngine.getRoad() == null) {
                     return;
                 }
-                double roadLengthMeters = simulationEngine.getRoad().getLength();
+                Road currentRoad = simulationEngine.getRoad();
+                RoadType currentRoadType = simulationParameters.getRoadType();
+                if (currentRoadType == null) currentRoadType = RoadType.CITY_ROAD;
+
+                double roadLengthMeters = currentRoad.getLength();
                 if (roadLengthMeters <= 0) return;
+
+                int roadCenterYOnPanel = simulationPanel.getHeight() / 2;
+                int roadRenderStartY = roadCenterYOnPanel - ROAD_RENDER_HEIGHT_FOR_CLICK / 2;
+                int roadRenderEndY = roadCenterYOnPanel + ROAD_RENDER_HEIGHT_FOR_CLICK / 2;
+
+                if (e.getY() < roadRenderStartY || e.getY() > roadRenderEndY) {
+                    return;
+                }
 
                 double clickXRatio = (double) e.getX() / simulationPanel.getWidth();
                 double positionOnRoad = clickXRatio * roadLengthMeters;
@@ -330,16 +293,31 @@ public class MainFrame extends JFrame {
                 }
                 if (!isPlacementPositionValid(positionOnRoad)) {
                     JOptionPane.showMessageDialog(MainFrame.this,
-                            "Невозможно разместить объект слишком близко к другому или к краю дороги.",
+                            "Невозможно разместить объект слишком близко к другому объекту или к краю дороги.\n" +
+                                    "Мин. отступ от края: " + MIN_EDGE_SPACING_METERS + "м, мин. отступ между объектами: " + MIN_OBJECT_SPACING_METERS + "м.",
                             "Ошибка размещения", JOptionPane.WARNING_MESSAGE);
                     currentPlacementMode = PlacementMode.NONE;
                     simulationPanel.setPlacementMode(false, null);
                     return;
                 }
+
+                int determinedTargetDirection = 0;
+                if (currentRoad.getNumberOfDirections() == 2) {
+                    if (currentRoadType == RoadType.TUNNEL) {
+                        determinedTargetDirection = -1;
+                    } else {
+                        if (e.getY() < roadCenterYOnPanel) {
+                            determinedTargetDirection = 0;
+                        } else {
+                            determinedTargetDirection = 1;
+                        }
+                    }
+                }
+
                 if (currentPlacementMode == PlacementMode.ADD_TRAFFIC_LIGHT) {
-                    openTrafficLightSettingsDialog(positionOnRoad);
+                    openTrafficLightSettingsDialog(positionOnRoad, determinedTargetDirection);
                 } else if (currentPlacementMode == PlacementMode.ADD_ROAD_SIGN) {
-                    openRoadSignSettingsDialog(positionOnRoad);
+                    openRoadSignSettingsDialog(positionOnRoad, determinedTargetDirection);
                 }
                 currentPlacementMode = PlacementMode.NONE;
                 simulationPanel.setPlacementMode(false, null);
@@ -351,119 +329,94 @@ public class MainFrame extends JFrame {
         if (simulationEngine.getRoad() == null) return false;
         if (newPosition < MIN_EDGE_SPACING_METERS ||
                 newPosition > (simulationEngine.getRoad().getLength() - MIN_EDGE_SPACING_METERS)) {
-            System.out.println("Попытка разместить объект слишком близко к краю дороги: " + String.format("%.1f", newPosition));
             return false;
         }
         List<TrafficLight> lights = simulationEngine.getRoad().getTrafficLights();
         if (lights != null) {
             for (TrafficLight light : lights) {
-                if (Math.abs(light.getPosition() - newPosition) < MIN_OBJECT_SPACING_METERS) {
-                    System.out.println("Слишком близко к светофору " + light.getId() + " на " + String.format("%.1f", light.getPosition()));
-                    return false;
-                }
+                if (Math.abs(light.getPosition() - newPosition) < MIN_OBJECT_SPACING_METERS) return false;
             }
         }
         List<RoadSign> signs = simulationEngine.getRoad().getRoadSigns();
         if (signs != null) {
             for (RoadSign sign : signs) {
-                if (Math.abs(sign.getPosition() - newPosition) < MIN_OBJECT_SPACING_METERS) {
-                    System.out.println("Слишком близко к знаку " + sign.getId() + " на " + String.format("%.1f", sign.getPosition()));
-                    return false;
-                }
+                if (Math.abs(sign.getPosition() - newPosition) < MIN_OBJECT_SPACING_METERS) return false;
             }
         }
         return true;
     }
 
-    private void openTrafficLightSettingsDialog(double position) {
-        if (simulationEngine.getRoad().getTrafficLights().size() >= 2) {
-            JOptionPane.showMessageDialog(this, "Достигнут лимит светофоров (макс. 2).", "Лимит", JOptionPane.INFORMATION_MESSAGE);
+    private void openTrafficLightSettingsDialog(double position, int determinedTargetDirection) {
+        if (simulationEngine.getRoad() == null || simulationEngine.getRoad().getTrafficLights().size() >= 2) {
+            JOptionPane.showMessageDialog(this, "Достигнут лимит светофоров (макс. 2) или дорога не инициализирована.", "Лимит/Ошибка", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
+        if (simulationParameters.getRoadType() == RoadType.TUNNEL) {
+            JOptionPane.showMessageDialog(this, "Для тоннеля светофоры управляются автоматически и не добавляются вручную.", "Информация", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
         JSpinner redDurationSpinner = new JSpinner(new SpinnerNumberModel(30, 20, 100, 1));
         JSpinner greenDurationSpinner = new JSpinner(new SpinnerNumberModel(30, 20, 100, 1));
 
-        JComboBox<String> directionComboBox = null;
-        String[] directionChoices = {"Направление 1 (->)", "Направление 2 (<-)"};
-        if (simulationEngine.getRoad() != null && simulationEngine.getRoad().getNumberOfDirections() == 2) {
-            directionComboBox = new JComboBox<>(directionChoices);
-        }
-
         JPanel panel = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridx = 0; gbc.gridy = 0; gbc.anchor = GridBagConstraints.WEST; gbc.insets = new Insets(2,2,2,2);
+        gbc.gridx = 0; gbc.gridy = 0; gbc.anchor = GridBagConstraints.WEST; gbc.insets = new Insets(5,5,5,5);
 
         panel.add(new JLabel("Длительность красного (с):"), gbc);
         gbc.gridx = 1; panel.add(redDurationSpinner, gbc);
         gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Длительность зеленого (с):"), gbc);
         gbc.gridx = 1; panel.add(greenDurationSpinner, gbc);
 
-        if (directionComboBox != null) {
-            gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Действует на:"), gbc);
-            gbc.gridx = 1; panel.add(directionComboBox, gbc);
-        }
+        // Метка о направлении УДАЛЕНА из диалога
 
         int result = JOptionPane.showConfirmDialog(this, panel,
-                "Настроить светофор на позиции " + String.format("%.1f", position) + "м",
+                "Настроить светофор на поз. " + String.format("%.1f", position) + "м",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
 
         if (result == JOptionPane.OK_OPTION) {
             double red = ((Number) redDurationSpinner.getValue()).doubleValue();
             double green = ((Number) greenDurationSpinner.getValue()).doubleValue();
             TrafficLightState initialState = TrafficLightState.GREEN;
-            int targetDirection = 0;
-            if (simulationEngine.getRoad() != null && simulationEngine.getRoad().getNumberOfDirections() == 1) {
-                targetDirection = 0;
-            } else if (directionComboBox != null && directionComboBox.getSelectedIndex() == 1) {
-                targetDirection = 1;
-            }
+
             simulationEngine.getRoad().addTrafficLight(
-                    new TrafficLight(position, red, green, initialState, targetDirection)
+                    new TrafficLight(position, red, green, initialState, determinedTargetDirection)
             );
-            System.out.println("Добавлен светофор: pos=" + position + ", R=" + red + ", G=" + green + ", Init=" + initialState + ", Dir=" + targetDirection);
             simulationPanel.updateSimulationState(simulationEngine.getRoad(), simulationEngine.getSimulationTime());
         }
     }
 
-    private void openRoadSignSettingsDialog(double position) {
-        RoadSignType[] signTypes = RoadSignType.values();
-        JComboBox<RoadSignType> typeComboBox = new JComboBox<>(signTypes);
-
-        JComboBox<String> directionComboBox = null;
-        String[] directionChoices = {"Направление 1 (->)", "Направление 2 (<-)"};
-        if (simulationEngine.getRoad() != null && simulationEngine.getRoad().getNumberOfDirections() == 2) {
-            directionComboBox = new JComboBox<>(directionChoices);
+    private void openRoadSignSettingsDialog(double position, int determinedTargetDirection) {
+        RoadType currentRoadType = simulationParameters.getRoadType();
+        if (currentRoadType == null) currentRoadType = RoadType.CITY_ROAD;
+        List<Integer> availableSpeeds = new ArrayList<>();
+        switch (currentRoadType) {
+            case CITY_ROAD: availableSpeeds.add(40); availableSpeeds.add(50); availableSpeeds.add(60); availableSpeeds.add(80); break;
+            case HIGHWAY: availableSpeeds.add(70); availableSpeeds.add(90); availableSpeeds.add(110); availableSpeeds.add(130); break;
+            case TUNNEL: availableSpeeds.add(40); availableSpeeds.add(50); availableSpeeds.add(60); availableSpeeds.add(70); break;
+            default: availableSpeeds.add(50); break;
         }
+        JComboBox<Integer> speedComboBox = new JComboBox<>(availableSpeeds.toArray(new Integer[0]));
 
         JPanel panel = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridx = 0; gbc.gridy = 0; gbc.anchor = GridBagConstraints.WEST; gbc.insets = new Insets(2,2,2,2);
+        gbc.gridx = 0; gbc.gridy = 0; gbc.anchor = GridBagConstraints.WEST; gbc.insets = new Insets(5,5,5,5);
+        panel.add(new JLabel("Ограничение скорости:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; panel.add(speedComboBox, gbc);
+        gbc.gridy++; gbc.gridx = 1; panel.add(new JLabel(" км/ч"), gbc);
 
-        panel.add(new JLabel("Тип знака:"), gbc);
-        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; panel.add(typeComboBox, gbc);
-        gbc.fill = GridBagConstraints.NONE;
-
-        if (directionComboBox != null) {
-            gbc.gridy++; gbc.gridx = 0; panel.add(new JLabel("Действует на:"), gbc);
-            gbc.gridx = 1; panel.add(directionComboBox, gbc);
-        }
+        // Метка о направлении УДАЛЕНА из диалога
 
         int result = JOptionPane.showConfirmDialog(this, panel,
-                "Добавить дорожный знак на позиции " + String.format("%.1f", position) + "м:",
+                "Добавить знак на поз. " + String.format("%.1f", position) + "м",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
 
         if (result == JOptionPane.OK_OPTION) {
-            RoadSignType selectedType = (RoadSignType) typeComboBox.getSelectedItem();
-            int targetDirection = 0;
-            if (simulationEngine.getRoad() != null && simulationEngine.getRoad().getNumberOfDirections() == 1) {
-                targetDirection = 0;
-            } else if (directionComboBox != null && directionComboBox.getSelectedIndex() == 1) {
-                targetDirection = 1;
-            }
+            Integer selectedSpeedLimit = (Integer) speedComboBox.getSelectedItem();
+            if (selectedSpeedLimit == null) return;
             simulationEngine.getRoad().addRoadSign(
-                    new RoadSign(position, selectedType, targetDirection)
+                    new RoadSign(position, RoadSignType.SPEED_LIMIT, determinedTargetDirection, selectedSpeedLimit.doubleValue())
             );
-            System.out.println("Добавлен знак: pos=" + position + ", тип=" + selectedType + ", Dir=" + targetDirection);
             simulationPanel.updateSimulationState(simulationEngine.getRoad(), simulationEngine.getSimulationTime());
         }
     }
