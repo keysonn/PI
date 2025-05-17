@@ -28,7 +28,7 @@ public class SimulationPanel extends JPanel {
     private static final Color ROAD_COLOR = new Color(100, 100, 100);
     private static final Color LANE_SEPARATOR_COLOR = Color.WHITE;
     private static final Color CENTER_LINE_COLOR = Color.YELLOW;
-    private static final Color GRASS_COLOR = new Color(34, 139, 34);
+    private static final Color GRASS_COLOR = new Color(36, 102, 36);
 
     private static final int TRAFFIC_LIGHT_VISUAL_WIDTH = 20;
     private static final int TRAFFIC_LIGHT_POLE_HEIGHT = 30; // Высота столба над/под дорогой

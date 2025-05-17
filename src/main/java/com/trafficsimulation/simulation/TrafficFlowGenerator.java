@@ -16,10 +16,10 @@ public class TrafficFlowGenerator {
     private double timeToNextCarScreenTop = 0.0;
     private double timeToNextCarScreenBottom = 0.0;
     private double timeSinceLastDeterministicCar = 0.0;
-    private boolean deterministicSpawnOnScreenTopNext = true; // Для поочередного спавна в детерминированном режиме
+    private boolean deterministicSpawnOnScreenTopNext = true;
 
     private static final double MIN_SPAWN_CLEARANCE_M = 7.0;
-    private static final boolean DETAILED_LOGGING = true;
+    private static final boolean DETAILED_LOGGING = false; // Выключим для производительности
 
 
     public TrafficFlowGenerator(SimulationParameters params, Road road) {
@@ -27,16 +27,12 @@ public class TrafficFlowGenerator {
         this.road = road;
         this.random = new Random(System.currentTimeMillis());
         resetGenerationTimers();
-        if (DETAILED_LOGGING) {
-            System.out.println("TrafficFlowGenerator создан. Тип дороги: " + road.getType() +
-                    ", Направления (модель): " + params.getNumberOfDirections() +
-                    ", Полос на направление: " + params.getLanesPerDirection());
-        }
     }
 
     private void resetGenerationTimers() {
+        // ... (без изменений, как в предыдущей версии) ...
         timeSinceLastDeterministicCar = 0.0;
-        deterministicSpawnOnScreenTopNext = true; // Начинаем с верхнего
+        deterministicSpawnOnScreenTopNext = true;
 
         if (params.isRandomTimeFlow()) {
             this.timeToNextCarScreenTop = generateNextRandomInterval();
@@ -62,6 +58,7 @@ public class TrafficFlowGenerator {
     }
 
     public Car[] generateCars(double deltaTime, TunnelControlState tunnelState) {
+        // ... (логика разрешения спавна и таймеров без изменений, как в предыдущей версии) ...
         Car carForScreenTop = null;
         Car carForScreenBottom = null;
         List<Car> existingCars = road.getCars();
@@ -80,15 +77,17 @@ public class TrafficFlowGenerator {
             allowSpawnForScreenBottom = true;
         }
 
-        int targetLocalLaneIndex = 0; // Всегда генерируем на крайней правой локальной полосе
+        // int targetLocalLaneIndex = 0; // Старая логика - всегда на правую
 
         if (params.isRandomTimeFlow()) {
             if (allowSpawnForScreenTop) {
                 timeToNextCarScreenTop -= deltaTime;
                 if (timeToNextCarScreenTop <= 0) {
-                    if (isSpawnPointClear(1, targetLocalLaneIndex, existingCars)) {
-                        carForScreenTop = createNewCar(1, targetLocalLaneIndex);
-                        timeToNextCarScreenTop = generateNextRandomInterval() + timeToNextCarScreenTop; // Добавляем остаток, если был отрицательным
+                    // Выбираем начальную полосу для model_dir = 1 (ScreenTop)
+                    int initialLocalLane1 = determineInitialLocalLane(1);
+                    if (isSpawnPointClear(1, initialLocalLane1, existingCars)) {
+                        carForScreenTop = createNewCar(1, initialLocalLane1);
+                        timeToNextCarScreenTop = generateNextRandomInterval() + timeToNextCarScreenTop;
                     } else {
                         timeToNextCarScreenTop = Math.max(0.1, timeToNextCarScreenTop + 0.1);
                     }
@@ -98,62 +97,67 @@ public class TrafficFlowGenerator {
             if (allowSpawnForScreenBottom) {
                 timeToNextCarScreenBottom -= deltaTime;
                 if (timeToNextCarScreenBottom <= 0) {
-                    if (isSpawnPointClear(0, targetLocalLaneIndex, existingCars)) {
-                        carForScreenBottom = createNewCar(0, targetLocalLaneIndex);
+                    // Выбираем начальную полосу для model_dir = 0 (ScreenBottom)
+                    int initialLocalLane0 = determineInitialLocalLane(0);
+                    if (isSpawnPointClear(0, initialLocalLane0, existingCars)) {
+                        carForScreenBottom = createNewCar(0, initialLocalLane0);
                         timeToNextCarScreenBottom = generateNextRandomInterval() + timeToNextCarScreenBottom;
                     } else {
                         timeToNextCarScreenBottom = Math.max(0.1, timeToNextCarScreenBottom + 0.1);
                     }
                 }
             }
-        } else { // Детерминированный поток времени
+        } else {
             timeSinceLastDeterministicCar += deltaTime;
             double requiredInterval = params.getDeterministicIntervalSeconds();
 
             if (requiredInterval > 0 && timeSinceLastDeterministicCar >= requiredInterval) {
                 boolean carCreatedThisTick = false;
-                if (road.getNumberOfDirections() == 2) { // Двухсторонняя дорога - поочередная генерация
+                if (road.getNumberOfDirections() == 2) {
                     if (deterministicSpawnOnScreenTopNext && allowSpawnForScreenTop) {
-                        if (isSpawnPointClear(1, targetLocalLaneIndex, existingCars)) {
-                            carForScreenTop = createNewCar(1, targetLocalLaneIndex);
+                        int initialLocalLane1 = determineInitialLocalLane(1);
+                        if (isSpawnPointClear(1, initialLocalLane1, existingCars)) {
+                            carForScreenTop = createNewCar(1, initialLocalLane1);
                             if (carForScreenTop != null) {
                                 carCreatedThisTick = true;
-                                deterministicSpawnOnScreenTopNext = false; // В следующий раз для нижнего
+                                deterministicSpawnOnScreenTopNext = false;
                             }
                         }
                     } else if (!deterministicSpawnOnScreenTopNext && allowSpawnForScreenBottom) {
-                        if (isSpawnPointClear(0, targetLocalLaneIndex, existingCars)) {
-                            carForScreenBottom = createNewCar(0, targetLocalLaneIndex);
+                        int initialLocalLane0 = determineInitialLocalLane(0);
+                        if (isSpawnPointClear(0, initialLocalLane0, existingCars)) {
+                            carForScreenBottom = createNewCar(0, initialLocalLane0);
                             if (carForScreenBottom != null) {
                                 carCreatedThisTick = true;
-                                deterministicSpawnOnScreenTopNext = true; // В следующий раз для верхнего
+                                deterministicSpawnOnScreenTopNext = true;
                             }
                         }
                     } else {
-                        // Если текущее "предпочтительное" направление запрещено (например, тоннелем),
-                        // пытаемся сгенерировать для другого разрешенного.
-                        if (allowSpawnForScreenBottom && deterministicSpawnOnScreenTopNext) { // Хотели для верхнего, но он запрещен, пробуем нижний
-                            if (isSpawnPointClear(0, targetLocalLaneIndex, existingCars)) {
-                                carForScreenBottom = createNewCar(0, targetLocalLaneIndex);
+                        if (allowSpawnForScreenBottom && deterministicSpawnOnScreenTopNext) {
+                            int initialLocalLane0 = determineInitialLocalLane(0);
+                            if (isSpawnPointClear(0, initialLocalLane0, existingCars)) {
+                                carForScreenBottom = createNewCar(0, initialLocalLane0);
                                 if (carForScreenBottom != null) {
                                     carCreatedThisTick = true;
-                                    deterministicSpawnOnScreenTopNext = true; // Следующий все равно верхний по очереди
+                                    // deterministicSpawnOnScreenTopNext не меняем, т.к. это была "компенсация"
                                 }
                             }
-                        } else if (allowSpawnForScreenTop && !deterministicSpawnOnScreenTopNext) { // Хотели для нижнего, но он запрещен, пробуем верхний
-                            if (isSpawnPointClear(1, targetLocalLaneIndex, existingCars)) {
-                                carForScreenTop = createNewCar(1, targetLocalLaneIndex);
+                        } else if (allowSpawnForScreenTop && !deterministicSpawnOnScreenTopNext) {
+                            int initialLocalLane1 = determineInitialLocalLane(1);
+                            if (isSpawnPointClear(1, initialLocalLane1, existingCars)) {
+                                carForScreenTop = createNewCar(1, initialLocalLane1);
                                 if (carForScreenTop != null) {
                                     carCreatedThisTick = true;
-                                    deterministicSpawnOnScreenTopNext = false; // Следующий все равно нижний по очереди
+                                    // deterministicSpawnOnScreenTopNext не меняем
                                 }
                             }
                         }
                     }
-                } else if (road.getNumberOfDirections() == 1) { // Односторонняя дорога
-                    if (allowSpawnForScreenBottom) { // Всегда для ScreenBottom (model_dir=0)
-                        if (isSpawnPointClear(0, targetLocalLaneIndex, existingCars)) {
-                            carForScreenBottom = createNewCar(0, targetLocalLaneIndex);
+                } else if (road.getNumberOfDirections() == 1) {
+                    if (allowSpawnForScreenBottom) {
+                        int initialLocalLane0 = determineInitialLocalLane(0);
+                        if (isSpawnPointClear(0, initialLocalLane0, existingCars)) {
+                            carForScreenBottom = createNewCar(0, initialLocalLane0);
                             if (carForScreenBottom != null) carCreatedThisTick = true;
                         }
                     }
@@ -167,13 +171,40 @@ public class TrafficFlowGenerator {
             }
         }
 
-        if (carForScreenTop != null && carForScreenBottom != null) return new Car[]{carForScreenTop, carForScreenBottom}; // Может произойти в случайном режиме
+        if (carForScreenTop != null && carForScreenBottom != null) return new Car[]{carForScreenTop, carForScreenBottom};
         if (carForScreenTop != null) return new Car[]{carForScreenTop};
         if (carForScreenBottom != null) return new Car[]{carForScreenBottom};
         return null;
     }
 
+    // Новый метод для определения начальной локальной полосы
+    private int determineInitialLocalLane(int modelDirection) {
+        int lanesPerDir = params.getLanesPerDirection();
+        if (lanesPerDir <= 1) {
+            return 0; // Если одна полоса, всегда 0
+        }
+
+        double generatedSpeedKmh = generateInitialSpeedKmhBasedOnSettings(); // Генерируем скорость, чтобы решить
+        RoadType roadType = road.getType();
+        double roadDefaultSpeedKmh = roadType.getDefaultSpeedLimitKmh();
+        double roadMaxSpeedKmh = roadType.getMaxSpeedLimitKmh();
+
+        // Локальный индекс: 0 = правая, lanesPerDir-1 = левая
+        if (generatedSpeedKmh >= roadMaxSpeedKmh * 0.9) { // Очень быстрые -> на левую
+            return lanesPerDir - 1;
+        } else if (generatedSpeedKmh > roadDefaultSpeedKmh * 1.1 && lanesPerDir > 2) { // Быстрее среднего и есть >2 полос -> средняя/левая
+            // Для 3 полос: 0 (прав), 1 (сред), 2 (лев). Вернем 1 или 2.
+            // Для 4 полос: 0 (прав), 1 (сред-прав), 2 (сред-лев), 3 (лев). Вернем 2 или 3.
+            return random.nextInt(lanesPerDir - 1) + 1; // Случайная из левых, кроме самой правой
+        } else if (generatedSpeedKmh > roadDefaultSpeedKmh * 1.05 && lanesPerDir > 1) { // Чуть быстрее среднего и есть левая
+            return Math.min(1, lanesPerDir - 1); // Вторая справа (локальная 1), если есть
+        } else { // Медленные или средние
+            return 0; // Крайняя правая
+        }
+    }
+
     private boolean isSpawnPointClear(int modelDirection, int targetLocalLaneIndex, List<Car> existingCars) {
+        // ... (без изменений) ...
         if (existingCars == null || road == null) return true;
         for (Car car : existingCars) {
             if (car.getDirection() == modelDirection && car.getCurrentLaneIndex() == targetLocalLaneIndex) {
@@ -192,6 +223,7 @@ public class TrafficFlowGenerator {
     }
 
     private double generateNextRandomInterval() {
+        // ... (без изменений) ...
         double interval = 10.0;
         DistributionLaw law = params.getTimeDistributionLaw();
         if (law == null) law = DistributionLaw.NORMAL;
@@ -215,6 +247,7 @@ public class TrafficFlowGenerator {
     }
 
     private double generateInitialSpeedKmhBasedOnSettings() {
+        // ... (без изменений) ...
         double speedKmh;
         if (params.isRandomSpeedFlow()) {
             DistributionLaw law = params.getSpeedDistributionLaw();
@@ -248,17 +281,20 @@ public class TrafficFlowGenerator {
     }
 
     private Car createNewCar(int modelDirection, int targetLocalLaneIndex) {
+        // ... (без изменений, кроме, возможно, логирования, если нужно видеть выбранную начальную полосу) ...
         double initialPosition = (modelDirection == 0) ? 0.0 : road.getLength();
         RoadType currentRoadType = road.getType();
+        // Скорость генерируется один раз и используется для определения полосы, а затем для машины
         double generatedSpeedKmh = generateInitialSpeedKmhBasedOnSettings();
+
         double minRoadTypeSpeedKmh = currentRoadType.getMinSpeedLimitKmh();
         double maxRoadTypeSpeedKmh = currentRoadType.getMaxSpeedLimitKmh();
         double initialSpeedKmh = Math.max(minRoadTypeSpeedKmh, Math.min(generatedSpeedKmh, maxRoadTypeSpeedKmh));
 
         if (DETAILED_LOGGING) {
             String screenDir = (modelDirection == 1) ? "ScreenTop (R->L, model_dir 1)" : "ScreenBottom (L->R, model_dir 0)";
-            System.out.printf(">>> CREATE CAR for %s: LocalLane: %d, InitPos: %.1f, FinalInitialSpeed:%.1f km/h%n",
-                    screenDir, targetLocalLaneIndex, initialPosition, initialSpeedKmh);
+            System.out.printf(">>> CREATE CAR for %s: DeterminedInitialLocalLane: %d, InitPos: %.1f, FinalInitialSpeed:%.1f km/h (GeneratedSpeed: %.1f)%n",
+                    screenDir, targetLocalLaneIndex, initialPosition, initialSpeedKmh, generatedSpeedKmh);
         }
 
         double initialSpeedMs = initialSpeedKmh / 3.6;
