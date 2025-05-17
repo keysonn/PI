@@ -1,31 +1,53 @@
 package com.trafficsimulation.model;
 
 public enum RoadType {
-    CITY_ROAD(40.0 / 3.6, 80.0 / 3.6),    // Городская дорога: 40-80 км/ч (скорости в м/с)
-    HIGHWAY(70.0 / 3.6, 130.0 / 3.6),      // Автомагистраль: 70-130 км/ч (скорости в м/с)
-    TUNNEL(40.0 / 3.6, 70.0 / 3.6);        // Тоннель: 40-70 км/ч (скорости в м/с) - можно настроить
+    CITY_ROAD("Городская дорога", 40, 80, 60),     // displayName, minSpeedKm/h, maxSpeedKm/h, defaultSpeedKm/h
+    HIGHWAY("Автомагистраль", 70, 130, 90),
+    TUNNEL("Тоннель", 40, 70, 50);
 
-    private final double minSpeedLimitMs; // Минимальная "типичная" или разрешенная скорость на этом типе дороги в м/с
-    private final double maxSpeedLimitMs; // Максимальная разрешенная скорость на этом типе дороги в м/с
+    private final String displayName;
+    private final double minSpeedLimitKmh;
+    private final double maxSpeedLimitKmh;
+    private final double defaultSpeedLimitKmh; // Скорость по умолчанию для этого типа дороги
 
-    RoadType(double minSpeedLimitMs, double maxSpeedLimitMs) {
-        this.minSpeedLimitMs = minSpeedLimitMs;
-        this.maxSpeedLimitMs = maxSpeedLimitMs;
+    RoadType(String displayName, double minSpeedKmh, double maxSpeedKmh, double defaultSpeedKmh) {
+        this.displayName = displayName;
+        this.minSpeedLimitKmh = minSpeedKmh;
+        this.maxSpeedLimitKmh = maxSpeedKmh;
+        this.defaultSpeedLimitKmh = defaultSpeedKmh;
     }
 
-    public double getMinSpeedLimitMs() {
-        return minSpeedLimitMs;
-    }
-
-    public double getMaxSpeedLimitMs() {
-        return maxSpeedLimitMs;
+    public String getDisplayName() {
+        return displayName;
     }
 
     public double getMinSpeedLimitKmh() {
-        return minSpeedLimitMs * 3.6;
+        return minSpeedLimitKmh;
     }
 
     public double getMaxSpeedLimitKmh() {
-        return maxSpeedLimitMs * 3.6;
+        return maxSpeedLimitKmh;
+    }
+
+    public double getDefaultSpeedLimitKmh() {
+        return defaultSpeedLimitKmh;
+    }
+
+    // Методы для получения скоростей в м/с
+    public double getMinSpeedLimitMs() {
+        return minSpeedLimitKmh / 3.6;
+    }
+
+    public double getMaxSpeedLimitMs() {
+        return maxSpeedLimitKmh / 3.6;
+    }
+
+    public double getDefaultSpeedLimitMs() {
+        return defaultSpeedLimitKmh / 3.6;
+    }
+
+    @Override
+    public String toString() {
+        return displayName; // Для отображения в JComboBox
     }
 }
