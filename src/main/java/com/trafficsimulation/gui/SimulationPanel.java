@@ -10,6 +10,7 @@ import com.trafficsimulation.model.TrafficLightState;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.geom.RoundRectangle2D;
 
 public class SimulationPanel extends JPanel {
 
@@ -20,17 +21,21 @@ public class SimulationPanel extends JPanel {
     private String placementHint = null;
 
     private static final int ROAD_RENDER_HEIGHT = 80;
-    private static final Color ROAD_COLOR = Color.DARK_GRAY;
-    private static final Color LANE_SEPARATOR_COLOR = Color.YELLOW;
+    private static final Color ROAD_COLOR = new Color(100, 100, 100);
+    private static final Color LANE_SEPARATOR_COLOR = Color.WHITE;
+    private static final Color CENTER_LINE_COLOR = Color.YELLOW;
+    private static final Color EDGE_LINE_COLOR = Color.WHITE;
     private static final Color GRASS_COLOR = new Color(34, 139, 34);
 
-    private static final int TRAFFIC_LIGHT_VISUAL_WIDTH = 20;
+    private static final int TRAFFIC_LIGHT_VISUAL_WIDTH = 20; // Диаметр самого сигнала
     private static final int TRAFFIC_LIGHT_POLE_HEIGHT = 30;
     private static final Color TRAFFIC_LIGHT_POLE_COLOR = Color.DARK_GRAY;
+    private static final int OBJECT_SIDE_OFFSET = 5; // Отступ объекта от края дороги
 
-    private static final int CAR_RENDER_WIDTH = 30;
-    private static final int CAR_RENDER_HEIGHT = 16;
-    private static final int CAR_ARC_RADIUS = 8;
+    private static final int CAR_RENDER_WIDTH = 32;
+    private static final int CAR_RENDER_HEIGHT = 18;
+    private static final int CAR_ARC_RADIUS = 10;
+    private static final Color CAR_WINDOW_COLOR = new Color(173, 216, 230, 180);
 
     private static final int ROAD_SIGN_SIZE = 24;
     private static final int ROAD_SIGN_POLE_HEIGHT = 30;
@@ -38,6 +43,10 @@ public class SimulationPanel extends JPanel {
     private static final Color ROAD_SIGN_BG_COLOR = Color.WHITE;
     private static final Color ROAD_SIGN_BORDER_COLOR = Color.RED;
     private static final Color ROAD_SIGN_TEXT_COLOR = Color.BLACK;
+
+    private final Stroke dashedStroke = new BasicStroke(2, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND, 0, new float[]{12, 8}, 0);
+    private final Stroke solidThinStroke = new BasicStroke(2);
+    private final Stroke solidThickStroke = new BasicStroke(3);
 
 
     public SimulationPanel() {
@@ -79,8 +88,7 @@ public class SimulationPanel extends JPanel {
             return;
         }
 
-        // Эту переменную теперь передаем в методы отрисовки
-        int roadY = getHeight() / 2 - ROAD_RENDER_HEIGHT / 2;
+        int roadY = getHeight() / 2 - ROAD_RENDER_HEIGHT / 2; // Верхний Y дороги
         drawRoadSurface(g2d, roadY);
 
         if (road.getCars() != null && !road.getCars().isEmpty()) {
@@ -93,20 +101,25 @@ public class SimulationPanel extends JPanel {
             int panelWidth = getWidth();
             for (TrafficLight light : road.getTrafficLights()) {
                 int lightScreenX;
-                int lightScreenY_signal_top = roadY - TRAFFIC_LIGHT_VISUAL_WIDTH - 5;
+                // Y верхнего края СИГНАЛА светофора
+                int lightSignalTopY;
                 if (light.getTargetDirection() == 1 && road.getType() != RoadType.TUNNEL && road.getNumberOfDirections() == 2) {
-                    lightScreenY_signal_top = roadY + ROAD_RENDER_HEIGHT + 5;
+                    // Снизу дороги: столб начинается от нижнего края дороги и идет вниз
+                    lightSignalTopY = roadY + ROAD_RENDER_HEIGHT + OBJECT_SIDE_OFFSET + TRAFFIC_LIGHT_POLE_HEIGHT;
+                } else {
+                    // Сверху дороги: столб начинается от верхнего края дороги и идет вверх
+                    lightSignalTopY = roadY - OBJECT_SIDE_OFFSET - TRAFFIC_LIGHT_POLE_HEIGHT - TRAFFIC_LIGHT_VISUAL_WIDTH;
                 }
 
                 double roadModelLength = road.getLength();
                 if (roadModelLength > 0) {
                     lightScreenX = (int) ((light.getPosition() / roadModelLength) * panelWidth);
-                    lightScreenX -= TRAFFIC_LIGHT_VISUAL_WIDTH / 2;
+                    lightScreenX -= TRAFFIC_LIGHT_VISUAL_WIDTH / 2; // Центрируем сам сигнал
                     lightScreenX = Math.max(0, Math.min(lightScreenX, panelWidth - TRAFFIC_LIGHT_VISUAL_WIDTH));
                 } else {
                     lightScreenX = 10;
                 }
-                drawTrafficLight(g2d, light, lightScreenX, lightScreenY_signal_top, roadY); // Передаем roadY
+                drawTrafficLight(g2d, light, lightScreenX, lightSignalTopY, roadY);
             }
         }
 
@@ -114,10 +127,16 @@ public class SimulationPanel extends JPanel {
             int panelWidth = getWidth();
             for (RoadSign sign : road.getRoadSigns()) {
                 int signScreenX;
-                int signScreenY_top = roadY - ROAD_SIGN_SIZE - 5;
+                // Y верхнего края ЗНАКА
+                int signTopY;
                 if (sign.getTargetDirection() == 1 && road.getNumberOfDirections() == 2 && road.getType() != RoadType.TUNNEL) {
-                    signScreenY_top = roadY + ROAD_RENDER_HEIGHT + 5;
+                    // Снизу дороги
+                    signTopY = roadY + ROAD_RENDER_HEIGHT + OBJECT_SIDE_OFFSET + ROAD_SIGN_POLE_HEIGHT;
+                } else {
+                    // Сверху дороги
+                    signTopY = roadY - OBJECT_SIDE_OFFSET - ROAD_SIGN_POLE_HEIGHT - ROAD_SIGN_SIZE;
                 }
+
                 double roadModelLength = road.getLength();
                 if (roadModelLength > 0) {
                     signScreenX = (int) ((sign.getPosition() / roadModelLength) * panelWidth);
@@ -126,7 +145,7 @@ public class SimulationPanel extends JPanel {
                 } else {
                     signScreenX = 20;
                 }
-                drawRoadSign(g2d, sign, signScreenX, signScreenY_top, roadY); // Передаем roadY
+                drawRoadSign(g2d, sign, signScreenX, signTopY, roadY);
             }
         }
         drawInfoPanel(g2d);
@@ -145,7 +164,6 @@ public class SimulationPanel extends JPanel {
     private void drawRoadSurface(Graphics2D g2d, int roadY) {
         g2d.setColor(ROAD_COLOR);
         g2d.fillRect(0, roadY, getWidth(), ROAD_RENDER_HEIGHT);
-        g2d.setColor(LANE_SEPARATOR_COLOR);
         int lanesPerDirection;
         if (road.getNumberOfDirections() > 0 && road.getNumberOfLanes() > 0) {
             lanesPerDirection = road.getNumberOfLanes() / road.getNumberOfDirections();
@@ -158,46 +176,60 @@ public class SimulationPanel extends JPanel {
         int laneVisualHeight = ROAD_RENDER_HEIGHT / numLanesTotalOnScreen;
 
         if (road.getType() == RoadType.TUNNEL) {
-            g2d.setStroke(new BasicStroke(2));
+            g2d.setColor(CENTER_LINE_COLOR);
+            g2d.setStroke(solidThickStroke);
             g2d.drawLine(0, roadY + ROAD_RENDER_HEIGHT / 2, getWidth(), roadY + ROAD_RENDER_HEIGHT / 2);
-        } else {
-            if (road.getNumberOfDirections() == 2) {
-                g2d.setStroke(new BasicStroke(3));
-                g2d.drawLine(0, roadY + (lanesPerDirection * laneVisualHeight),
-                        getWidth(), roadY + (lanesPerDirection * laneVisualHeight));
+        } else if (road.getNumberOfDirections() == 1) {
+            g2d.setColor(LANE_SEPARATOR_COLOR);
+            g2d.setStroke(dashedStroke);
+            for (int i = 1; i < numLanesTotalOnScreen; i++) {
+                int lineY = roadY + i * laneVisualHeight;
+                g2d.drawLine(0, lineY, getWidth(), lineY);
             }
-            g2d.setStroke(new BasicStroke(2, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND,
-                    0, new float[]{15, 10}, 0));
-            for (int dir = 0; dir < road.getNumberOfDirections(); dir++) {
-                for (int lane = 1; lane < lanesPerDirection; lane++) {
-                    int lineY = roadY + (dir * lanesPerDirection * laneVisualHeight) + (lane * laneVisualHeight);
-                    g2d.drawLine(0, lineY, getWidth(), lineY);
-                }
+        } else if (road.getNumberOfDirections() == 2) {
+            g2d.setColor(CENTER_LINE_COLOR);
+            g2d.setStroke(solidThinStroke);
+            int centerLineY = roadY + lanesPerDirection * laneVisualHeight;
+            int gapBetweenDoubleLines = 3;
+            g2d.drawLine(0, centerLineY - gapBetweenDoubleLines / 2, getWidth(), centerLineY - gapBetweenDoubleLines / 2);
+            g2d.drawLine(0, centerLineY + gapBetweenDoubleLines / 2, getWidth(), centerLineY + gapBetweenDoubleLines / 2);
+            g2d.setColor(LANE_SEPARATOR_COLOR);
+            g2d.setStroke(dashedStroke);
+            for (int i = 1; i < lanesPerDirection; i++) {
+                int lineY_dir0 = roadY + i * laneVisualHeight;
+                g2d.drawLine(0, lineY_dir0, getWidth(), lineY_dir0);
+                int lineY_dir1 = roadY + (lanesPerDirection * laneVisualHeight) + i * laneVisualHeight;
+                g2d.drawLine(0, lineY_dir1, getWidth(), lineY_dir1);
             }
         }
-        g2d.setColor(Color.WHITE);
-        g2d.setStroke(new BasicStroke(2));
+        g2d.setColor(EDGE_LINE_COLOR);
+        g2d.setStroke(solidThinStroke);
         g2d.drawLine(0, roadY, getWidth(), roadY);
         g2d.drawLine(0, roadY + ROAD_RENDER_HEIGHT, getWidth(), roadY + ROAD_RENDER_HEIGHT);
     }
 
-    // ИЗМЕНЕНА СИГНАТУРА: добавлен параметр roadY
-    private void drawTrafficLight(Graphics2D g2d, TrafficLight light, int screenX, int screenY_signal_top, int roadY) {
+    // screenY_signal_top - это Y координата ВЕРХНЕГО КРАЯ самого СИГНАЛА (круга)
+    private void drawTrafficLight(Graphics2D g2d, TrafficLight light, int screenX, int screenY_signal_top, int roadTopY) {
         int signalDiameter = TRAFFIC_LIGHT_VISUAL_WIDTH;
         int signalRadius = signalDiameter / 2;
         g2d.setColor(TRAFFIC_LIGHT_POLE_COLOR);
-        int poleX = screenX + signalRadius - 2;
-        if (screenY_signal_top < roadY) { // Сравниваем с переданным roadY
-            g2d.fillRect(poleX, screenY_signal_top + signalDiameter, 4, TRAFFIC_LIGHT_POLE_HEIGHT);
-        } else {
-            g2d.fillRect(poleX, screenY_signal_top - TRAFFIC_LIGHT_POLE_HEIGHT, 4, TRAFFIC_LIGHT_POLE_HEIGHT);
+        int poleX = screenX + signalRadius - 2; // Центр столба по X
+
+        if (screenY_signal_top < roadTopY) { // Светофор СВЕРХУ дороги
+            // Столб рисуется от верхнего края дороги до низа сигнала
+            g2d.fillRect(poleX, roadTopY - TRAFFIC_LIGHT_POLE_HEIGHT - OBJECT_SIDE_OFFSET, 4, TRAFFIC_LIGHT_POLE_HEIGHT);
+        } else { // Светофор СНИЗУ дороги
+            // Столб рисуется от нижнего края дороги до верха сигнала
+            g2d.fillRect(poleX, roadTopY + ROAD_RENDER_HEIGHT + OBJECT_SIDE_OFFSET, 4, TRAFFIC_LIGHT_POLE_HEIGHT);
         }
+
         Color signalColor;
         if (light.getCurrentState() == TrafficLightState.GREEN) signalColor = Color.GREEN.brighter();
         else if (light.getCurrentState() == TrafficLightState.RED) signalColor = Color.RED.brighter();
         else signalColor = Color.GRAY;
         g2d.setColor(signalColor);
         g2d.fillOval(screenX, screenY_signal_top, signalDiameter, signalDiameter);
+
         Color textColor = (light.getCurrentState() == TrafficLightState.GREEN) ? Color.BLACK : Color.WHITE;
         g2d.setColor(textColor);
         g2d.setFont(new Font("Arial", Font.BOLD, Math.max(9, signalRadius - 2)));
@@ -219,24 +251,23 @@ public class SimulationPanel extends JPanel {
             carScreenX = (car.getDirection() == 0) ? -CAR_RENDER_WIDTH : panelWidth;
         }
         carScreenX -= CAR_RENDER_WIDTH / 2;
-        int lanesPerDirVisual;
-        if (road.getNumberOfDirections() > 0 && road.getNumberOfLanes() > 0) {
-            lanesPerDirVisual = road.getNumberOfLanes() / road.getNumberOfDirections();
-        } else {
-            lanesPerDirVisual = road.getNumberOfLanes();
-        }
-        if (lanesPerDirVisual == 0) lanesPerDirVisual = 1;
-        int totalLanesOnScreenVisual = road.getNumberOfLanes();
-        if(totalLanesOnScreenVisual == 0) totalLanesOnScreenVisual = 1;
-        int laneVisualHeight = ROAD_RENDER_HEIGHT / totalLanesOnScreenVisual;
+        int totalLanesOnRoad = road.getNumberOfLanes();
+        if (totalLanesOnRoad == 0) totalLanesOnRoad = 1;
+        int laneVisualHeight = ROAD_RENDER_HEIGHT / totalLanesOnRoad;
         int carScreenY = roadSurfaceY + (car.getLaneIndex() * laneVisualHeight) + (laneVisualHeight / 2 - CAR_RENDER_HEIGHT / 2);
-        Color carColor;
-        if (car.getDirection() == 0) carColor = new Color(60, 100, 200);
-        else carColor = new Color(150, 60, 180);
-        g2d.setColor(carColor);
-        g2d.fillRoundRect(carScreenX, carScreenY, CAR_RENDER_WIDTH, CAR_RENDER_HEIGHT, CAR_ARC_RADIUS, CAR_ARC_RADIUS);
-        g2d.setColor(carColor.darker());
-        g2d.drawRoundRect(carScreenX, carScreenY, CAR_RENDER_WIDTH, CAR_RENDER_HEIGHT, CAR_ARC_RADIUS, CAR_ARC_RADIUS);
+        Color carBodyColor;
+        if (car.getDirection() == 0) carBodyColor = new Color(50, 90, 180);
+        else carBodyColor = new Color(180, 50, 90);
+        Shape carShape = new RoundRectangle2D.Double(carScreenX, carScreenY, CAR_RENDER_WIDTH, CAR_RENDER_HEIGHT, CAR_ARC_RADIUS, CAR_ARC_RADIUS);
+        g2d.setColor(carBodyColor);
+        g2d.fill(carShape);
+        g2d.setColor(CAR_WINDOW_COLOR);
+        int windowWidth = CAR_RENDER_WIDTH / 2;
+        int windowHeight = CAR_RENDER_HEIGHT / 2 - 2;
+        int windowXOffset = (car.getDirection() == 0) ? CAR_RENDER_WIDTH / 2 - 2 : 2;
+        g2d.fillRoundRect(carScreenX + windowXOffset , carScreenY + 2, windowWidth, windowHeight, CAR_ARC_RADIUS / 2, CAR_ARC_RADIUS / 2);
+        g2d.setColor(carBodyColor.darker());
+        g2d.draw(carShape);
         g2d.setColor(Color.WHITE);
         g2d.setFont(new Font("SansSerif", Font.BOLD, 10));
         String speedText = String.format("%.0f", car.getCurrentSpeed() * 3.6);
@@ -273,14 +304,17 @@ public class SimulationPanel extends JPanel {
         g2d.drawString(roadInfoStr, 10, 50);
     }
 
-    // ИЗМЕНЕНА СИГНАТУРА: добавлен параметр roadY
-    private void drawRoadSign(Graphics2D g2d, RoadSign sign, int screenX, int screenY_sign_top, int roadY) {
+    // screenY_sign_top - это Y координата ВЕРХНЕГО КРАЯ самого ЗНАКА
+    private void drawRoadSign(Graphics2D g2d, RoadSign sign, int screenX, int screenY_sign_top, int roadTopY) {
         g2d.setColor(ROAD_SIGN_POLE_COLOR);
         int poleX = screenX + ROAD_SIGN_SIZE / 2 - 2;
-        if (screenY_sign_top < roadY) { // Сравниваем с переданным roadY
-            g2d.fillRect(poleX, screenY_sign_top + ROAD_SIGN_SIZE, 4, ROAD_SIGN_POLE_HEIGHT);
-        } else {
-            g2d.fillRect(poleX, screenY_sign_top - ROAD_SIGN_POLE_HEIGHT, 4, ROAD_SIGN_POLE_HEIGHT);
+
+        if (screenY_sign_top < roadTopY) { // Знак СВЕРХУ дороги
+            // Столб от верхнего края дороги до низа знака
+            g2d.fillRect(poleX, roadTopY - ROAD_SIGN_POLE_HEIGHT - OBJECT_SIDE_OFFSET, 4, ROAD_SIGN_POLE_HEIGHT);
+        } else { // Знак СНИЗУ дороги
+            // Столб от нижнего края дороги до верха знака
+            g2d.fillRect(poleX, roadTopY + ROAD_RENDER_HEIGHT + OBJECT_SIDE_OFFSET, 4, ROAD_SIGN_POLE_HEIGHT);
         }
 
         if (sign.getType() == RoadSignType.SPEED_LIMIT) {
@@ -294,7 +328,7 @@ public class SimulationPanel extends JPanel {
             String text = String.format("%.0f", sign.getSpeedLimitKmh());
             int fontSize = ROAD_SIGN_SIZE / 2;
             if (sign.getSpeedLimitKmh() >= 100) fontSize = (int)(ROAD_SIGN_SIZE / 2.3f);
-            else if (sign.getSpeedLimitKmh() < 10) fontSize = (int)(ROAD_SIGN_SIZE / 1.9f); // Было <100, изменил на <10
+            else if (sign.getSpeedLimitKmh() < 10) fontSize = (int)(ROAD_SIGN_SIZE / 1.9f);
             g2d.setFont(new Font("Arial", Font.BOLD, fontSize));
             FontMetrics fm = g2d.getFontMetrics();
             int textWidth = fm.stringWidth(text);
