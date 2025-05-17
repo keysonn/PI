@@ -2,91 +2,130 @@ package com.trafficsimulation.model;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator; // Добавим для сортировки, если еще не было
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-/**
- * Представляет участок дороги со всеми машинами, светофорами и знаками.
- */
 public class Road {
 
-    private final double length;
+    private final double length; // в метрах
     private final RoadType type;
-    private final int numberOfLanes;
+    private final int lanesPerDirection; // Количество полос В ОДНОМ направлении (было numberOfLanesPerDirection)
     private final int numberOfDirections;
+    private final int totalLanes; // Общее количество полос на дороге
 
     private final List<Car> cars;
     private final List<TrafficLight> trafficLights;
     private final List<RoadSign> roadSigns;
 
-    public Road(double lengthKm, RoadType type, int lanesPerDirection, int directions) {
+    public Road(double lengthKm, RoadType type, int lanesPerDirParam, int directionsParam) {
         this.length = Math.max(1.0, Math.min(lengthKm, 50.0)) * 1000.0;
         this.type = type;
-        int validatedLanesPerDir = Math.max(1, Math.min(lanesPerDirection, 4));
-        this.numberOfDirections = Math.max(1, Math.min(directions, 2));
-        this.numberOfLanes = validatedLanesPerDir * this.numberOfDirections;
+        this.numberOfDirections = Math.max(1, Math.min(directionsParam, 2));
+        // Убедимся, что lanesPerDirParam корректно используется
+        this.lanesPerDirection = Math.max(1, Math.min(lanesPerDirParam, 4));
+        this.totalLanes = this.lanesPerDirection * this.numberOfDirections;
 
         this.cars = new CopyOnWriteArrayList<>();
         this.trafficLights = new ArrayList<>();
         this.roadSigns = new ArrayList<>();
-        System.out.println("Создана Road: " + this);
     }
 
     public void addCar(Car car) {
-        this.cars.add(car);
+        if (car != null) {
+            this.cars.add(car);
+        }
     }
 
     public void removeCar(Car car) {
-        this.cars.remove(car);
+        if (car != null) {
+            this.cars.remove(car);
+        }
     }
 
     public void addTrafficLight(TrafficLight light) {
-        if (light.getPosition() >= 0 && light.getPosition() <= this.length) {
-            if (this.trafficLights.size() < 2) {
+        if (light != null && light.getPosition() >= 0 && light.getPosition() <= this.length) {
+            if (this.trafficLights.size() < 2 && !containsTrafficLightAt(light.getPosition())) {
                 this.trafficLights.add(light);
-                Collections.sort(this.trafficLights, (l1, l2) -> Double.compare(l1.getPosition(), l2.getPosition()));
-            } else {
-                System.err.println("Превышен лимит светофоров (макс 2)");
+                // Сортируем по позиции для последовательного поиска
+                this.trafficLights.sort(Comparator.comparingDouble(TrafficLight::getPosition));
+            } else if (this.trafficLights.size() >= 2) {
+                System.err.println("Road: Превышен лимит светофоров (макс 2). Светофор не добавлен: " + light);
             }
-        } else {
-            System.err.println("Светофор вне дороги: " + light);
+        } else if (light != null) {
+            System.err.println("Road: Попытка добавить светофор вне дороги: " + light);
         }
     }
 
-    public void addRoadSign(RoadSign sign) {
-        if (sign.getPosition() >= 0 && sign.getPosition() <= this.length) {
-            this.roadSigns.add(sign);
-            Collections.sort(this.roadSigns, (s1, s2) -> Double.compare(s1.getPosition(), s2.getPosition()));
-        } else {
-            System.err.println("Знак вне дороги: " + sign);
+    private boolean containsTrafficLightAt(double position) {
+        for (TrafficLight tl : trafficLights) {
+            if (Math.abs(tl.getPosition() - position) < 0.1) return true;
+        }
+        return false;
+    }
+
+    public void removeTrafficLight(TrafficLight light) {
+        if (light != null) {
+            this.trafficLights.remove(light);
         }
     }
 
-    /** Очищает список светофоров на дороге */
     public void clearTrafficLights() {
         if (this.trafficLights != null) {
             this.trafficLights.clear();
         }
     }
 
-    /** Очищает список дорожных знаков на дороге */
+    public void addRoadSign(RoadSign sign) {
+        if (sign != null && sign.getPosition() >= 0 && sign.getPosition() <= this.length) {
+            this.roadSigns.add(sign);
+            this.roadSigns.sort(Comparator.comparingDouble(RoadSign::getPosition));
+        } else if (sign != null) {
+            System.err.println("Road: Попытка добавить знак вне дороги: " + sign);
+        }
+    }
+
+    public void removeRoadSign(RoadSign sign) {
+        if (sign != null) {
+            this.roadSigns.remove(sign);
+        }
+    }
+
     public void clearRoadSigns() {
         if (this.roadSigns != null) {
             this.roadSigns.clear();
         }
     }
 
+    // --- Геттеры ---
     public double getLength() { return length; }
     public RoadType getType() { return type; }
-    public int getNumberOfLanes() { return numberOfLanes; }
+
+    /**
+     * Возвращает количество полос в одном направлении движения.
+     * @return количество полос в одном направлении
+     */
+    public int getLanesPerDirection() { // ИСПРАВЛЕНО НАЗВАНИЕ (если было numberOfLanesPerDirection)
+        return lanesPerDirection;
+    }
+
     public int getNumberOfDirections() { return numberOfDirections; }
+
+    /**
+     * Возвращает общее количество полос на дороге (сумма по всем направлениям).
+     * @return общее количество полос
+     */
+    public int getNumberOfLanes() { // Переименовал из getTotalLanes для единообразия с ТЗ
+        return totalLanes;
+    }
+
     public List<Car> getCars() { return cars; }
-    public List<TrafficLight> getTrafficLights() { return Collections.unmodifiableList(trafficLights); }
-    public List<RoadSign> getRoadSigns() { return Collections.unmodifiableList(roadSigns); }
+    public List<TrafficLight> getTrafficLights() { return Collections.unmodifiableList(new ArrayList<>(trafficLights)); }
+    public List<RoadSign> getRoadSigns() { return Collections.unmodifiableList(new ArrayList<>(roadSigns)); }
 
     @Override
     public String toString() {
-        return String.format("Road[type=%s, len=%.0fm, lanes=%d, cars=%d, lights=%d, signs=%d]",
-                type, length, numberOfLanes, cars.size(), trafficLights.size(), roadSigns.size());
+        return String.format("Road[type=%s, len=%.0fm, dirs=%d, lanesPerDir=%d (totalLanes=%d), cars=%d, lights=%d, signs=%d]",
+                type, length, numberOfDirections, lanesPerDirection, totalLanes, cars.size(), trafficLights.size(), roadSigns.size());
     }
 }

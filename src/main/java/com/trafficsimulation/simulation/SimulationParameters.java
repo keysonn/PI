@@ -4,35 +4,34 @@ import com.trafficsimulation.model.RoadType;
 
 public class SimulationParameters {
 
-    // Константа для длины дороги
-    public static final double FIXED_ROAD_LENGTH_KM = 2.0; // Длина дороги теперь 2 км
+    public static final double FIXED_ROAD_LENGTH_KM = 2.0;
 
-    // Дорога
     private RoadType roadType = RoadType.CITY_ROAD;
-    // private double roadLengthKm = 5.0; // УДАЛЕНО или закомментировано
     private int lanesPerDirection = 2;
     private int numberOfDirections = 1;
 
-    // Настройки светофоров для Тоннеля
     private double tunnelDefaultRedDuration = 30.0;
     private double tunnelDefaultGreenDuration = 30.0;
     private double tunnelClearanceTime = 10.0;
 
-    // Флаги случайности
     private boolean isRandomSpeedFlow = false;
     private boolean isRandomTimeFlow = false;
 
-    // Детерминированный поток
-    private double deterministicIntervalSeconds = 10.0;
+    // Детерминированный интервал (ТЗ был 10-15, новый мин ~6.7)
+    private double deterministicIntervalSeconds = 8.0; // ИЗМЕНЕНО ДЕФОЛТНОЕ (в новых пределах)
     private double deterministicSpeedKmh = 60.0;
 
     // Случайный поток - Время
     private DistributionLaw timeDistributionLaw = DistributionLaw.NORMAL;
-    private double timeUniformMinSec = 10.0;
-    private double timeUniformMaxSec = 15.0;
-    private double timeNormalMeanSec = 20.0;
-    private double timeNormalVarianceSec = 5.0;
+    // Равномерный интервал (ТЗ был 10-15, новый мин ~6.7)
+    private double timeUniformMinSec = 7.0;  // ИЗМЕНЕНО ДЕФОЛТНОЕ
+    private double timeUniformMaxSec = 12.0; // ИЗМЕНЕНО ДЕФОЛТНОЕ (чтобы max > min)
+    // Нормальное мат. ожидание (ТЗ был 20-120, новый мин ~13.4)
+    private double timeNormalMeanSec = 15.0; // ИЗМЕНЕНО ДЕФОЛТНОЕ
+    private double timeNormalVarianceSec = 5.0; // Дисперсия (ТЗ 0-20), оставляем
+    // Интенсивность (ТЗ 1-20 авто/сек), пока оставляем
     private double timeExponentialIntensityPerSec = 1.0;
+
 
     // Случайный поток - Скорость
     private DistributionLaw speedDistributionLaw = DistributionLaw.NORMAL;
@@ -42,24 +41,17 @@ public class SimulationParameters {
     private double speedNormalVarianceKmh = 10.0;
     private double speedExponentialIntensityPerKmh = 0.02;
 
-    // Симуляция
-    private double simulationTimeStep = 0.1; // Шаг времени для обновления логики (не отрисовки)
+    private double simulationTimeStep = 0.1;
     private double simulationSpeedFactor = 1.0;
 
     // --- Геттеры ---
     public RoadType getRoadType() { return roadType; }
-
-    public double getRoadLengthKm() { // ИЗМЕНЕНО
-        return FIXED_ROAD_LENGTH_KM;
-    }
-
+    public double getRoadLengthKm() { return FIXED_ROAD_LENGTH_KM; }
     public int getLanesPerDirection() { return lanesPerDirection; }
     public int getNumberOfDirections() { return numberOfDirections; }
-
     public double getTunnelDefaultRedDuration() { return tunnelDefaultRedDuration; }
     public double getTunnelDefaultGreenDuration() { return tunnelDefaultGreenDuration; }
     public double getTunnelClearanceTime() { return tunnelClearanceTime; }
-
     public boolean isRandomSpeedFlow() { return isRandomSpeedFlow; }
     public boolean isRandomTimeFlow() { return isRandomTimeFlow; }
     public double getDeterministicIntervalSeconds() { return deterministicIntervalSeconds; }
@@ -81,14 +73,11 @@ public class SimulationParameters {
 
     // --- Сеттеры ---
     public void setRoadType(RoadType roadType) { this.roadType = roadType; }
-    // public void setRoadLengthKm(double roadLengthKm) { this.roadLengthKm = roadLengthKm; } // УДАЛЕНО или закомментировано
     public void setLanesPerDirection(int lanes) { this.lanesPerDirection = lanes; }
     public void setNumberOfDirections(int directions) { this.numberOfDirections = directions; }
-
     public void setTunnelDefaultRedDuration(double duration) { this.tunnelDefaultRedDuration = duration; }
     public void setTunnelDefaultGreenDuration(double duration) { this.tunnelDefaultGreenDuration = duration; }
     public void setTunnelClearanceTime(double time) { this.tunnelClearanceTime = time; }
-
     public void setRandomSpeedFlow(boolean randomSpeedFlow) { this.isRandomSpeedFlow = randomSpeedFlow; }
     public void setRandomTimeFlow(boolean randomTimeFlow) { this.isRandomTimeFlow = randomTimeFlow; }
     public void setDeterministicIntervalSeconds(double interval) { this.deterministicIntervalSeconds = interval; }
@@ -112,10 +101,9 @@ public class SimulationParameters {
     public String toString() {
         return "SimulationParameters{" +
                 "roadType=" + roadType +
-                ", roadLengthKm=" + getRoadLengthKm() + // Используем геттер
+                ", roadLengthKm=" + getRoadLengthKm() +
                 ", lanesPerDirection=" + lanesPerDirection +
                 ", numberOfDirections=" + numberOfDirections +
-                // ... другие параметры для полноты, если нужно для отладки ...
                 '}';
     }
 }

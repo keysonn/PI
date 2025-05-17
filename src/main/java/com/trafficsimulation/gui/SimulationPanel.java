@@ -245,29 +245,55 @@ public class SimulationPanel extends JPanel {
         double roadModelLength = road.getLength();
         int panelWidth = getWidth();
         int carScreenX;
+
         if (roadModelLength > 0) {
             carScreenX = (int) ((car.getPosition() / roadModelLength) * panelWidth);
         } else {
-            carScreenX = (car.getDirection() == 0) ? -CAR_RENDER_WIDTH : panelWidth;
+            // Если длина дороги 0, машины не должны появляться, но на всякий случай
+            carScreenX = (car.getDirection() == 0) ? -CAR_RENDER_WIDTH : panelWidth + CAR_RENDER_WIDTH;
         }
-        carScreenX -= CAR_RENDER_WIDTH / 2;
-        int totalLanesOnRoad = road.getNumberOfLanes();
-        if (totalLanesOnRoad == 0) totalLanesOnRoad = 1;
-        int laneVisualHeight = ROAD_RENDER_HEIGHT / totalLanesOnRoad;
-        int carScreenY = roadSurfaceY + (car.getLaneIndex() * laneVisualHeight) + (laneVisualHeight / 2 - CAR_RENDER_HEIGHT / 2);
+        carScreenX -= CAR_RENDER_WIDTH / 2; // Центрируем машину по X
+
+        // Расчет Y координаты:
+        int totalLanesOnRoad = road.getNumberOfLanes(); // Общее количество полос на дороге (например, 2+2=4 для двухсторонки по 2 полосы)
+        if (totalLanesOnRoad == 0) totalLanesOnRoad = 1; // Защита от деления на ноль
+
+        int laneVisualHeight = ROAD_RENDER_HEIGHT / totalLanesOnRoad; // Высота одной визуальной полосы на экране
+
+        // car.getLaneIndex() - это ГЛОБАЛЬНЫЙ индекс полосы.
+        // Для двухсторонней дороги с N полос в каждом направлении:
+        // Направление 0 (сверху вниз на экране): полосы 0, 1, ..., N-1
+        // Направление 1 (сверху вниз на экране): полосы N, N+1, ..., 2N-1
+        // Этот глобальный индекс используется для смещения вниз от roadSurfaceY.
+        int carScreenY = roadSurfaceY +                                  // Верхний край всей дороги
+                (car.getLaneIndex() * laneVisualHeight) +        // Смещение к началу нужной полосы
+                (laneVisualHeight / 2 - CAR_RENDER_HEIGHT / 2); // Центрирование машины ВНУТРИ ЕЕ полосы
+
+        // Лог для отладки (можно оставить на время тестирования)
+        // System.out.printf("DRAW CAR ID: %d, Dir: %d, LaneIdx: %d, ModelPos: %.1f -> ScreenX: %d, ScreenY: %d (RoadY: %d, PanelH: %d, LaneVisualHeight: %d)%n",
+        //        car.getId(), car.getDirection(), car.getLaneIndex(), car.getPosition(),
+        //        carScreenX, carScreenY, roadSurfaceY, getHeight(), laneVisualHeight);
+
         Color carBodyColor;
-        if (car.getDirection() == 0) carBodyColor = new Color(50, 90, 180);
-        else carBodyColor = new Color(180, 50, 90);
+        if (car.getDirection() == 0) {
+            carBodyColor = new Color(50, 90, 180); // Синий для ->
+        } else {
+            carBodyColor = new Color(180, 50, 90); // Красноватый для <-
+        }
+
         Shape carShape = new RoundRectangle2D.Double(carScreenX, carScreenY, CAR_RENDER_WIDTH, CAR_RENDER_HEIGHT, CAR_ARC_RADIUS, CAR_ARC_RADIUS);
         g2d.setColor(carBodyColor);
         g2d.fill(carShape);
+
         g2d.setColor(CAR_WINDOW_COLOR);
         int windowWidth = CAR_RENDER_WIDTH / 2;
         int windowHeight = CAR_RENDER_HEIGHT / 2 - 2;
         int windowXOffset = (car.getDirection() == 0) ? CAR_RENDER_WIDTH / 2 - 2 : 2;
         g2d.fillRoundRect(carScreenX + windowXOffset , carScreenY + 2, windowWidth, windowHeight, CAR_ARC_RADIUS / 2, CAR_ARC_RADIUS / 2);
+
         g2d.setColor(carBodyColor.darker());
         g2d.draw(carShape);
+
         g2d.setColor(Color.WHITE);
         g2d.setFont(new Font("SansSerif", Font.BOLD, 10));
         String speedText = String.format("%.0f", car.getCurrentSpeed() * 3.6);
