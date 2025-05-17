@@ -33,8 +33,7 @@ public class SimulationEngine implements Runnable {
     private TrafficLight tunnelLightDir0;
     private TrafficLight tunnelLightDir1;
 
-    private static final boolean ENGINE_DEBUG_LOGGING = false; // Держите выключенным для производительности
-    // LANE_CHANGE_DECISION_INTERVAL теперь в Car.java как DECISION_MAKING_INTERVAL
+    private static final boolean ENGINE_DEBUG_LOGGING = false;
 
 
     public SimulationEngine(SimulationParameters params, SimulationPanel panel) {
@@ -58,7 +57,7 @@ public class SimulationEngine implements Runnable {
                 parameters.getLanesPerDirection(),
                 parameters.getNumberOfDirections()
         );
-        this.flowGenerator = new TrafficFlowGenerator(parameters, this.road); // Создается после Road
+        this.flowGenerator = new TrafficFlowGenerator(parameters, this.road);
         this.simulationTime = 0.0;
         this.tunnelLightDir0 = null;
         this.tunnelLightDir1 = null;
@@ -68,8 +67,8 @@ public class SimulationEngine implements Runnable {
 
         if (isTunnelActive) {
             double roadModelLength = this.road.getLength();
-            double leftLightPosition = roadModelLength * 0.25;  // Въезд для model_dir = 0
-            double rightLightPosition = roadModelLength * 0.75; // Въезд для model_dir = 1
+            double leftLightPosition = roadModelLength * 0.25;
+            double rightLightPosition = roadModelLength * 0.75;
 
             tunnelLightDir0 = new TrafficLight(leftLightPosition, parameters.getTunnelDefaultRedDuration(), parameters.getTunnelDefaultGreenDuration(), TrafficLightState.GREEN, 0);
             tunnelLightDir0.setExternallyControlled(true);
@@ -79,7 +78,7 @@ public class SimulationEngine implements Runnable {
             tunnelLightDir1.setExternallyControlled(true);
             this.road.addTrafficLight(tunnelLightDir1);
 
-            tunnelControlState = TunnelControlState.DIR0_GREEN; // model_dir 0 (L->R, рисуется снизу) начинает с зеленого
+            tunnelControlState = TunnelControlState.DIR0_GREEN;
             tunnelPhaseTimer = parameters.getTunnelDefaultGreenDuration();
             if (ENGINE_DEBUG_LOGGING) System.out.println("Tunnel activated. Initial state: DIR0_GREEN (model_dir 0 L->R). Timer: " + tunnelPhaseTimer);
         }
@@ -170,13 +169,13 @@ public class SimulationEngine implements Runnable {
             long loopStartTime = System.nanoTime();
             double deltaTimeFromLastFrame = (loopStartTime - lastUpdateTime) / 1_000_000_000.0;
             lastUpdateTime = loopStartTime;
-            deltaTimeFromLastFrame = Math.min(deltaTimeFromLastFrame, 0.1); // Cap deltaTime
+            deltaTimeFromLastFrame = Math.min(deltaTimeFromLastFrame, 0.1);
             double simulationDeltaTime = deltaTimeFromLastFrame * parameters.getSimulationSpeedFactor();
 
             if (road != null) step(simulationDeltaTime);
 
             if (simulationPanel != null) {
-                Road currentRoadForPanel = road; // Pass current state
+                Road currentRoadForPanel = road;
                 double currentSimTimeForPanel = simulationTime;
                 SwingUtilities.invokeLater(() -> simulationPanel.updateSimulationState(currentRoadForPanel, currentSimTimeForPanel));
             }
@@ -221,7 +220,6 @@ public class SimulationEngine implements Runnable {
             return (car1.getDirection() == 0) ? Double.compare(car1.getPosition(), car2.getPosition()) : Double.compare(car2.getPosition(), car1.getPosition());
         });
 
-        // --- Фаза 1: Обновление движения всех машин (IDM) ---
         for (Car car : currentCars) {
             Car leadCar = findLeadCarOnLocalLane(car, car.getCurrentLaneIndex(), currentCars);
             double distanceToLead = (leadCar != null) ? Math.max(0.01, Math.abs(leadCar.getPosition() - car.getPosition()) - Car.APPROX_CAR_LENGTH) : Double.POSITIVE_INFINITY;
@@ -239,7 +237,6 @@ public class SimulationEngine implements Runnable {
             car.update(deltaTime, leadCar, distanceToLead, effectiveSpeedLimit, nextLightState, distanceToLight);
         }
 
-        // --- Фаза 2: Принятие решений о смене полосы ---
         if (road.getType() != RoadType.TUNNEL && road.getLanesPerDirection() > 1) {
             for (Car car : currentCars) {
                 if (car.canConsiderLaneChange()) {
@@ -248,7 +245,6 @@ public class SimulationEngine implements Runnable {
             }
         }
 
-        // --- Фаза 3: Выполнение закоммиченных и безопасных смен полос ---
         if (road.getType() != RoadType.TUNNEL && road.getLanesPerDirection() > 1) {
             for (Car car : currentCars) {
                 if (!car.isChangingLane() && (car.isCommittedToChangeLeft() || car.isCommittedToChangeRight())) {
@@ -283,14 +279,14 @@ public class SimulationEngine implements Runnable {
 
         Double leftBenefit = null;
         int targetLocalLeftLane = -1;
-        boolean overallSafetyLeft = false; // Безопасность для СЕБЯ при перестроении влево (не врезаться в лидера)
-        boolean leftChangeHurtsFollower = true; // По умолчанию считаем, что помешает, пока не доказано обратное
+        boolean overallSafetyLeft = false;
+        boolean leftChangeHurtsFollower = true;
 
         if (!isLeftmost) {
             targetLocalLeftLane = currentLocalLane + 1;
             leftBenefit = calculatePotentialAccelerationOnLocalLane(car, targetLocalLeftLane, allCars);
             overallSafetyLeft = isSafeGapForLeader(car, targetLocalLeftLane, allCars);
-            if (overallSafetyLeft) { // Проверяем последователя, только если с лидером все ок
+            if (overallSafetyLeft) {
                 leftChangeHurtsFollower = checkFollowerDecelerationTooHigh(car, targetLocalLeftLane, allCars);
             }
         }
@@ -311,10 +307,11 @@ public class SimulationEngine implements Runnable {
 
         car.decideLaneChange(currentObservedAcceleration, leftBenefit, rightBenefit,
                 isRightmost, isLeftmost,
-                overallSafetyLeft, overallSafetyRight, // Безопасность для себя
-                leftChangeHurtsFollower, rightChangeHurtsFollower, // Сильная помеха другим
+                overallSafetyLeft, overallSafetyRight,
+                leftChangeHurtsFollower, rightChangeHurtsFollower,
                 road.getLanesPerDirection(), road.getType().getDefaultSpeedLimitMs(), road.getType().getMaxSpeedLimitMs());
     }
+
 
     private boolean isSafeGapForLeader(Car car, int targetLocalLaneIndex, List<Car> allCars) {
         Car newLeader = findLeadCarOnLocalLane(car, targetLocalLaneIndex, allCars);
@@ -327,39 +324,35 @@ public class SimulationEngine implements Runnable {
         return true;
     }
 
-    // Возвращает true, если новый последователь будет вынужден тормозить СЛИШКОМ сильно
     private boolean checkFollowerDecelerationTooHigh(Car carChanging, int targetLocalLaneIndex, List<Car> allCars) {
         Car newFollower = findFollowerOnLocalLane(carChanging, targetLocalLaneIndex, allCars);
         if (newFollower != null) {
             double distanceCarToNewFollower = Math.abs(carChanging.getPosition() - newFollower.getPosition()) - Car.APPROX_CAR_LENGTH;
-            // Если мы слишком близко к новому последователю, это сразу небезопасно (даже без расчета ускорения)
-            if (distanceCarToNewFollower < Car.MIN_GAP * 0.7) { // Уменьшил множитель, т.к. это почти столкновение
+            if (distanceCarToNewFollower < Car.MIN_GAP * 0.7) {
                 if (ENGINE_DEBUG_LOGGING) System.out.printf("Car %d: Follower %d on lane %d is too close (%.1fm) for safety check.%n", carChanging.getId(), newFollower.getId(), targetLocalLaneIndex, distanceCarToNewFollower);
                 return true;
             }
 
             double followerSpeed = newFollower.getCurrentSpeed();
             double followerDesiredSpeed = newFollower.getDesiredSpeed();
-            double followerAccel = newFollower.getAccelerationParam();
-            double followerDecel = newFollower.getBaseDecelerationParam();
+            // Используем АКТУАЛЬНЫЕ параметры IDM машины-последователя
+            double followerAccel = newFollower.getActualAccelerationParam();
+            double followerDecel = newFollower.getActualBaseDecelerationParam();
+            double followerSafeTimeHeadway = newFollower.getActualSafeTimeHeadway();
 
-            // Оцениваем ускорение последователя, если НАША машина (carChanging) окажется перед ним
             double deltaV_follower_hypothetical = followerSpeed - carChanging.getCurrentSpeed();
-            double s_star_follower = Car.MIN_GAP + Math.max(0, followerSpeed * Car.SAFE_TIME_HEADWAY +
+            double s_star_follower = Car.MIN_GAP + Math.max(0, followerSpeed * followerSafeTimeHeadway +
                     (followerSpeed * deltaV_follower_hypothetical) / (2 * Math.sqrt(followerAccel * followerDecel)));
 
             double freeRoadFollower = followerAccel * (1 - Math.pow(followerSpeed / Math.max(0.1, followerDesiredSpeed), Car.ACCELERATION_EXPONENT));
             double interactionFollower;
-            // Важно: distanceCarToNewFollower здесь должна быть положительной, если newFollower действительно сзади
             if (distanceCarToNewFollower > 0.1) {
                 interactionFollower = -followerAccel * Math.pow(s_star_follower / distanceCarToNewFollower, 2);
-            } else { // Если почти вплотную, сильное торможение
+            } else {
                 interactionFollower = -followerAccel * Math.pow(s_star_follower / 0.1, 2);
             }
             double potentialAccelerationFollower = freeRoadFollower + interactionFollower;
 
-            // Используем Car.POLITENESS_FACTOR для определения, насколько сильно мы готовы "обидеть" другого
-            // Чем выше POLITENESS_FACTOR, тем менее негативное ускорение мы допускаем для других
             if (potentialAccelerationFollower < (-Car.SAFE_DECELERATION_FOR_OTHERS + Car.POLITENESS_FACTOR * Car.SAFE_DECELERATION_FOR_OTHERS)) {
                 if (ENGINE_DEBUG_LOGGING) System.out.printf("Car %d: Follower %d on lane %d would brake at %.2f (limit %.2f). Change hurts too much.%n", carChanging.getId(), newFollower.getId(), targetLocalLaneIndex, potentialAccelerationFollower, (-Car.SAFE_DECELERATION_FOR_OTHERS + Car.POLITENESS_FACTOR * Car.SAFE_DECELERATION_FOR_OTHERS));
                 return true;
@@ -371,31 +364,24 @@ public class SimulationEngine implements Runnable {
     private boolean isLaneChangeSafeAndNotConflicting(Car carMakingChange, int targetLocalLane, List<Car> allCars) {
         if (!isSafeGapForLeader(carMakingChange, targetLocalLane, allCars) ||
                 checkFollowerDecelerationTooHigh(carMakingChange, targetLocalLane, allCars)) {
-            // if (ENGINE_DEBUG_LOGGING) System.out.printf("Car %d: Basic safety check FAILED for lane %d%n", carMakingChange.getId(), targetLocalLane);
             return false;
         }
 
         for (Car otherCar : allCars) {
             if (otherCar.getId() == carMakingChange.getId() || otherCar.getDirection() != carMakingChange.getDirection()) continue;
 
-            // Конфликт 1: Другая машина УЖЕ перестраивается на НАШУ ЦЕЛЕВУЮ полосу
             if (otherCar.isChangingLane() && otherCar.getTargetLaneForChange() == targetLocalLane) {
-                if (Math.abs(otherCar.getPosition() - carMakingChange.getPosition()) < Car.APPROX_CAR_LENGTH * 5) { // Увеличим зону для уже перестраивающихся
-                    // if (ENGINE_DEBUG_LOGGING) System.out.printf("Car %d: CONFLICT with car %d already changing to lane %d%n", carMakingChange.getId(), otherCar.getId(), targetLocalLane);
+                if (Math.abs(otherCar.getPosition() - carMakingChange.getPosition()) < Car.APPROX_CAR_LENGTH * 5) {
                     return false;
                 }
             }
-            // Конфликт 2: Другая машина ЗАКОММИТИЛАСЬ на НАШУ ЦЕЛЕВУЮ полосу (и она не мы)
             if ((otherCar.isCommittedToChangeLeft() || otherCar.isCommittedToChangeRight()) && otherCar.getCommittedTargetLane() == targetLocalLane) {
                 if (Math.abs(otherCar.getPosition() - carMakingChange.getPosition()) < Car.APPROX_CAR_LENGTH * 5) {
-                    // if (ENGINE_DEBUG_LOGGING) System.out.printf("Car %d: CONFLICT with car %d committed to lane %d%n", carMakingChange.getId(), otherCar.getId(), targetLocalLane);
                     return false;
                 }
             }
-            // Конфликт 3: Перекрестное перестроение (другая УЖЕ меняет полосу С НАШЕЙ ЦЕЛЕВОЙ на НАШУ ТЕКУЩУЮ)
             if (otherCar.isChangingLane() && otherCar.getCurrentLaneIndex() == targetLocalLane && otherCar.getTargetLaneForChange() == carMakingChange.getCurrentLaneIndex()){
-                if (Math.abs(otherCar.getPosition() - carMakingChange.getPosition()) < Car.APPROX_CAR_LENGTH * 4) { // Зона для перекрещивания
-                    // if (ENGINE_DEBUG_LOGGING) System.out.printf("Car %d: CROSSING CONFLICT with car %d changing from %d to %d%n", carMakingChange.getId(), otherCar.getId(), otherCar.getCurrentLaneIndex(), otherCar.getTargetLaneForChange());
+                if (Math.abs(otherCar.getPosition() - carMakingChange.getPosition()) < Car.APPROX_CAR_LENGTH * 4) {
                     return false;
                 }
             }
@@ -406,12 +392,18 @@ public class SimulationEngine implements Runnable {
     private double calculatePotentialAccelerationOnLocalLane(Car car, int targetLocalLaneIndex, List<Car> allCars) {
         Car leadCarOnTargetLane = findLeadCarOnLocalLane(car, targetLocalLaneIndex, allCars);
         double distanceToLead = (leadCarOnTargetLane != null) ? Math.max(0.01, Math.abs(leadCarOnTargetLane.getPosition() - car.getPosition()) - Car.APPROX_CAR_LENGTH) : Double.POSITIVE_INFINITY;
+
         double desiredSpeed = car.getDesiredSpeed();
         double currentSpeed = car.getCurrentSpeed();
-        double accelParam = car.getAccelerationParam();
-        double decelParam = car.getBaseDecelerationParam();
+        // Используем АКТУАЛЬНЫЕ параметры IDM машины 'car'
+        double accelParam = car.getActualAccelerationParam();
+        double decelParam = car.getActualBaseDecelerationParam();
+        double safeTimeHeadway = car.getActualSafeTimeHeadway();
+
         double deltaV_hypothetical = (leadCarOnTargetLane != null) ? currentSpeed - leadCarOnTargetLane.getCurrentSpeed() : 0;
-        double s_star = Car.MIN_GAP + Math.max(0, currentSpeed * Car.SAFE_TIME_HEADWAY + (currentSpeed * deltaV_hypothetical) / (2 * Math.sqrt(accelParam * decelParam)));
+        double s_star = Car.MIN_GAP + Math.max(0, currentSpeed * safeTimeHeadway +
+                (currentSpeed * deltaV_hypothetical) / (2 * Math.sqrt(accelParam * decelParam)));
+
         double freeRoadTerm = accelParam * (1 - Math.pow(currentSpeed / Math.max(0.1, desiredSpeed), Car.ACCELERATION_EXPONENT));
         double interactionTerm = 0.0;
         if (leadCarOnTargetLane != null && distanceToLead < 200) {
