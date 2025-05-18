@@ -37,7 +37,7 @@ public class Car {
     public static final double BASE_ACCEL_GAIN_THRESHOLD_REGULAR = 0.2;
     public static final double LANE_CHANGE_MANEUVER_COST = 0.1;
     public static final double OPTIMAL_LANE_BIAS_ACCEL = 0.3;
-    public static final double RIGHTMOST_LANE_BIAS_ACCEL = 0.15; // Чуть усилим тягу к правой, если не оптимальная
+    public static final double RIGHTMOST_LANE_BIAS_ACCEL = 0.15;
     public static final double SAFE_DECELERATION_FOR_OTHERS = 3.0;
     private static final double LANE_CHANGE_DURATION = 2.0;
     private static final double LANE_CHANGE_COOLDOWN = 2.5;
@@ -72,7 +72,6 @@ public class Car {
     public Car(double initialPosition, double initialSpeed, double personalMaxSpeedMs,
                DriverType driverType,
                int localLaneIndex, int direction) {
-        // ... (конструктор без изменений) ...
         this.id = idCounter.incrementAndGet();
         this.position = initialPosition;
         this.currentSpeed = Math.max(0, initialSpeed);
@@ -80,6 +79,7 @@ public class Car {
         this.driverType = driverType;
         this.currentLaneIndex = localLaneIndex;
         this.direction = direction;
+
         this.actualSafeTimeHeadway = BASE_SAFE_TIME_HEADWAY * driverType.idmTimeHeadwayMultiplier;
         this.actualAccelerationParam = BASE_ACCELERATION_PARAM * driverType.idmAccelParamMultiplier;
         this.actualBaseDecelerationParam = BASE_DECELERATION_PARAM;
@@ -89,7 +89,6 @@ public class Car {
     }
 
     public void updateDesiredSpeed(double externalSpeedLimitMs) {
-        // ... (без изменений) ...
         double capSpeed = Math.min(this.maxSpeed, externalSpeedLimitMs);
         this.desiredSpeed = capSpeed * this.driverType.desiredSpeedMultiplier;
         this.desiredSpeed = Math.min(this.desiredSpeed, capSpeed);
@@ -98,7 +97,6 @@ public class Car {
 
     public void update(double deltaTime, Car leadCar, double distanceToLeadBumperToBumper,
                        double effectiveSpeedLimit, TrafficLightState nextLightState, double distanceToLightAbs) {
-        // ... (без изменений) ...
         if (deltaTime <= 0) return;
         timeSinceChangeCompleted += deltaTime;
         timeSinceLastLaneChangeDecision += deltaTime;
@@ -162,7 +160,6 @@ public class Car {
     }
 
     public boolean canConsiderLaneChange() {
-        // ... (без изменений) ...
         return !isChangingLane && timeSinceChangeCompleted >= LANE_CHANGE_COOLDOWN && timeSinceLastLaneChangeDecision >= DECISION_MAKING_INTERVAL;
     }
 
@@ -180,32 +177,26 @@ public class Car {
         resetCommitments();
         timeSinceLastLaneChangeDecision = 0.0;
 
-        // 1. Определяем "оптимальную" полосу
         int optimalLaneIndex = 0;
         if (lanesPerDirection > 1) {
-            // Для АГРЕССИВНЫХ: если хотят ехать быстро, оптимальная - самая левая
             if (driverType == DriverType.AGGRESSIVE && this.desiredSpeed > roadTypeDefaultSpeedMs * 1.05 && !isCurrentLaneTheLeftmost) {
                 optimalLaneIndex = lanesPerDirection - 1;
             }
-            // Для ОСТОРОЖНЫХ: всегда правая
             else if (driverType == DriverType.CAUTIOUS) {
                 optimalLaneIndex = 0;
             }
-            // Для НОРМАЛЬНЫХ (и других случаев для агрессивных/осторожных)
             else {
                 if (this.desiredSpeed >= roadTypeMaxSpeedMs * 0.80 && !isCurrentLaneTheLeftmost) {
                     optimalLaneIndex = lanesPerDirection - 1;
                 } else if (this.desiredSpeed > roadTypeDefaultSpeedMs * 1.05 && currentLaneIndex < lanesPerDirection - 1) {
-                    // Если есть 3+ полосы, могут выбрать не самую левую, а одну из левых
                     if (lanesPerDirection > 2) optimalLaneIndex = Math.min(currentLaneIndex + 1 + random.nextInt(lanesPerDirection - (currentLaneIndex + 1)), lanesPerDirection - 1);
-                    else optimalLaneIndex = lanesPerDirection - 1; // Если 2 полосы, то левая
+                    else optimalLaneIndex = lanesPerDirection - 1;
                 } else {
-                    optimalLaneIndex = 0; // По умолчанию правая
+                    optimalLaneIndex = 0;
                 }
             }
         }
-        // ... (остальная логика decideLaneChange с оценкой bestGain и bestTargetLane - БЕЗ ИЗМЕНЕНИЙ) ...
-        // Важно, что пороги и бонусы теперь могут по-разному влиять на разных водителей.
+
         double bestGain = -Double.MAX_VALUE;
         int bestTargetLane = -1;
 
@@ -258,7 +249,6 @@ public class Car {
         }
     }
 
-    // ... (остальные методы: startLaneChangeIfCommitted, startLaneChange, resetCommitments, геттеры, toString - БЕЗ ИЗМЕНЕНИЙ) ...
     public void startLaneChangeIfCommitted(int targetLocalLane) {
         if ((committedToChangeLeft && targetLocalLane > currentLaneIndex) ||
                 (committedToChangeRight && targetLocalLane < currentLaneIndex)) {
@@ -270,6 +260,7 @@ public class Car {
             }
         }
     }
+
     private void startLaneChange(int targetLocalLane) {
         if (!isChangingLane && this.currentLaneIndex != targetLocalLane) {
             this.isChangingLane = true;
@@ -277,11 +268,13 @@ public class Car {
             this.laneChangeProgress = 0.0;
         }
     }
+
     public void resetCommitments() {
         this.committedToChangeLeft = false;
         this.committedToChangeRight = false;
         this.committedTargetLane = -1;
     }
+
     public boolean isCommittedToChangeLeft() { return committedToChangeLeft; }
     public boolean isCommittedToChangeRight() { return committedToChangeRight; }
     public int getCommittedTargetLane() { return committedTargetLane; }
@@ -299,6 +292,7 @@ public class Car {
     public double getActualBaseDecelerationParam() { return actualBaseDecelerationParam; }
     public double getActualSafeTimeHeadway() { return actualSafeTimeHeadway; }
     public DriverType getDriverType() { return driverType; }
+
     @Override
     public String toString() {
         return String.format("Car{id=%d, %s, dir=%d, locLane=%d, pos=%.1f, spd=%.1f (ds=%.1f), commitT=%d}",

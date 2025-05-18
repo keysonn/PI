@@ -40,12 +40,14 @@ public class ModelingSettingsDialog extends JDialog {
     private JSpinner timeNormalMeanSpinner, timeNormalVarianceSpinner;
     private JSpinner timeExponentialIntensitySpinner;
 
+    private static final boolean DETAILED_LOGGING_MSD = false; // Логирование для этого класса
+
 
     public ModelingSettingsDialog(Frame owner, SimulationParameters currentParams) {
         super(owner, "Настройки параметров моделирования", true);
         this.params = currentParams;
 
-        initComponents(); // Инициализация компонентов с базовыми моделями
+        initComponents();
         layoutComponents();
         addListeners();
         pack();
@@ -59,7 +61,7 @@ public class ModelingSettingsDialog extends JDialog {
         speedRandomRadio = new JToggleButton("Случайный");
         speedFlowTypeGroup = new ButtonGroup();
         speedFlowTypeGroup.add(speedDeterministicRadio); speedFlowTypeGroup.add(speedRandomRadio);
-        speedDetValueSpinner = new JSpinner(); // Модель будет установлена в updateSpeedSpinners
+        speedDetValueSpinner = new JSpinner();
 
         speedLawUniform = new JToggleButton("Равномерный");
         speedLawNormal = new JToggleButton("Нормальный");
@@ -70,17 +72,18 @@ public class ModelingSettingsDialog extends JDialog {
         speedUniformMinSpinner = new JSpinner();
         speedUniformMaxSpinner = new JSpinner();
         speedNormalMeanSpinner = new JSpinner();
-        speedNormalVarianceSpinner = new JSpinner(new SpinnerNumberModel(10.0, 0.0, 40.0, 1.0)); // Дисперсия не зависит от типа дороги
-        speedExponentialIntensitySpinner = new JSpinner(new SpinnerNumberModel(0.02, 1.0/130.0, 1.0/20.0, 0.001)); // Интенсивность скорости
+        speedNormalVarianceSpinner = new JSpinner(new SpinnerNumberModel(10.0, 0.0, 40.0, 1.0));
+        speedExponentialIntensitySpinner = new JSpinner(new SpinnerNumberModel(0.02, 0.007, 0.1, 0.001));
         ((JSpinner.NumberEditor)speedExponentialIntensitySpinner.getEditor()).getFormat().setMinimumFractionDigits(3);
 
 
-        // --- Время появления ---
+        // --- Время появления (ИЗМЕНЕНЫ ПРЕДЕЛЫ) ---
         timeDeterministicRadio = new JToggleButton("Детерминированный");
         timeRandomRadio = new JToggleButton("Случайный");
         timeFlowTypeGroup = new ButtonGroup();
         timeFlowTypeGroup.add(timeDeterministicRadio); timeFlowTypeGroup.add(timeRandomRadio);
-        timeDetValueSpinner = new JSpinner(new SpinnerNumberModel(8.0, 6.5, 15.0, 0.1));
+        // Детерминированный интервал: 1.0 - 8.0 секунд, начальное 3.0, шаг 0.5
+        timeDetValueSpinner = new JSpinner(new SpinnerNumberModel(3.0, 1.0, 8.0, 0.5));
 
         timeLawUniform = new JToggleButton("Равномерный");
         timeLawNormal = new JToggleButton("Нормальный");
@@ -88,11 +91,15 @@ public class ModelingSettingsDialog extends JDialog {
         timeLawGroup = new ButtonGroup();
         timeLawGroup.add(timeLawUniform); timeLawGroup.add(timeLawNormal); timeLawGroup.add(timeLawExponential);
 
-        timeUniformMinSpinner = new JSpinner(new SpinnerNumberModel(7.0, 6.5, 15.0, 0.1));
-        timeUniformMaxSpinner = new JSpinner(new SpinnerNumberModel(12.0, 6.5, 15.0, 0.1));
-        timeNormalMeanSpinner = new JSpinner(new SpinnerNumberModel(15.0, 13.5, 120.0, 0.1));
-        timeNormalVarianceSpinner = new JSpinner(new SpinnerNumberModel(5.0, 0.0, 20.0, 0.1));
-        timeExponentialIntensitySpinner = new JSpinner(new SpinnerNumberModel(1.0, 0.3, 20.0, 0.1));
+        // Равномерное время: min 0.8-7.0, max 1.0-8.0, шаг 0.1
+        timeUniformMinSpinner = new JSpinner(new SpinnerNumberModel(2.0, 0.8, 7.0, 0.1));
+        timeUniformMaxSpinner = new JSpinner(new SpinnerNumberModel(5.0, 1.0, 8.0, 0.1));
+        // Нормальное время: мат.ожидание 1.5-10.0с, дисперсия 0.0-5.0с^2, шаг 0.1
+        timeNormalMeanSpinner = new JSpinner(new SpinnerNumberModel(4.0, 1.5, 10.0, 0.1));
+        timeNormalVarianceSpinner = new JSpinner(new SpinnerNumberModel(1.0, 0.0, 5.0, 0.1));
+        // Показательное время: интенсивность 0.2-3.0 авто/сек, начальное 1.0, шаг 0.1
+        timeExponentialIntensitySpinner = new JSpinner(new SpinnerNumberModel(1.0, 0.2, 3.0, 0.1));
+
 
         speedParamsUniformPanel = createSingleParameterPanel(new String[]{"Нижняя граница:", "Верхняя граница:"}, new String[]{"км/ч", "км/ч"}, speedUniformMinSpinner, speedUniformMaxSpinner);
         speedParamsNormalPanel = createSingleParameterPanel(new String[]{"Мат. ожидание:", "Дисперсия:"}, new String[]{"км/ч", "(км/ч)²"}, speedNormalMeanSpinner, speedNormalVarianceSpinner);
@@ -104,45 +111,37 @@ public class ModelingSettingsDialog extends JDialog {
 
     private void updateSpeedSpinnersModelsAndValues() {
         RoadType currentRoadType = params.getRoadType();
-        System.out.println("[DEBUG] ModelingSettingsDialog.updateSpeedSpinnersModelsAndValues: Current RoadType from params = " + currentRoadType);
+        if (DETAILED_LOGGING_MSD) System.out.println("[DEBUG] MSD.updateSpeedSpinners: params.getRoadType() = " + currentRoadType);
 
         if (currentRoadType == null) {
-            System.out.println("[DEBUG] ModelingSettingsDialog.updateSpeedSpinnersModelsAndValues: RoadType was null, defaulting to CITY_ROAD.");
+            if (DETAILED_LOGGING_MSD) System.out.println("[DEBUG] MSD.updateSpeedSpinners: RoadType was null, defaulting to CITY_ROAD.");
             currentRoadType = RoadType.CITY_ROAD;
         }
 
         double minSpeedLimit = currentRoadType.getMinSpeedLimitKmh();
         double maxSpeedLimit = currentRoadType.getMaxSpeedLimitKmh();
-        double defaultSpeed = currentRoadType.getDefaultSpeedLimitKmh();
 
-        // Детерминированная скорость
         double detSpeedVal = params.getDeterministicSpeedKmh();
-        detSpeedVal = Math.max(minSpeedLimit, Math.min(detSpeedVal, maxSpeedLimit)); // Приводим к границам
+        detSpeedVal = Math.max(minSpeedLimit, Math.min(detSpeedVal, maxSpeedLimit));
         speedDetValueSpinner.setModel(new SpinnerNumberModel(detSpeedVal, minSpeedLimit, maxSpeedLimit, 1.0));
 
-        // Равномерное распределение скорости
         double uniformMinVal = params.getSpeedUniformMinKmh();
         uniformMinVal = Math.max(minSpeedLimit, Math.min(uniformMinVal, maxSpeedLimit));
         double uniformMaxVal = params.getSpeedUniformMaxKmh();
         uniformMaxVal = Math.max(minSpeedLimit, Math.min(uniformMaxVal, maxSpeedLimit));
-        if (uniformMinVal > uniformMaxVal) uniformMinVal = uniformMaxVal; // Гарантируем min <= max
+        if (uniformMinVal > uniformMaxVal) uniformMinVal = uniformMaxVal;
         speedUniformMinSpinner.setModel(new SpinnerNumberModel(uniformMinVal, minSpeedLimit, maxSpeedLimit, 1.0));
-        if (uniformMinVal > uniformMaxVal) uniformMaxVal = uniformMinVal; // Перепроверка после установки min
-        uniformMaxVal = Math.max(uniformMinVal, uniformMaxVal); // Гарантируем, что max не меньше min
+        if (uniformMinVal > uniformMaxVal) uniformMaxVal = uniformMinVal;
+        uniformMaxVal = Math.max(uniformMinVal, uniformMaxVal);
         speedUniformMaxSpinner.setModel(new SpinnerNumberModel(uniformMaxVal, minSpeedLimit, maxSpeedLimit, 1.0));
 
-
-        // Нормальное распределение скорости (мат. ожидание)
         double normalMeanVal = params.getSpeedNormalMeanKmh();
         normalMeanVal = Math.max(minSpeedLimit, Math.min(normalMeanVal, maxSpeedLimit));
         speedNormalMeanSpinner.setModel(new SpinnerNumberModel(normalMeanVal, minSpeedLimit, maxSpeedLimit, 1.0));
 
-        // Дисперсия и интенсивность скорости - их модели не меняются в зависимости от min/max скорости дороги
-        // но мы можем перезагрузить их значения из params, если они там есть
         speedNormalVarianceSpinner.setValue(params.getSpeedNormalVarianceKmh());
         speedExponentialIntensitySpinner.setValue(params.getSpeedExponentialIntensityPerKmh());
     }
-
 
     private JPanel createSingleParameterPanel(String[] labels, String[] units, JComponent... components) {
         // ... (без изменений) ...
@@ -297,14 +296,10 @@ public class ModelingSettingsDialog extends JDialog {
     private void packIfVisible() { if (isVisible()) pack(); }
 
     private void loadParameters() {
-        // Сначала обновляем модели и значения спиннеров скорости на основе типа дороги
+        // ... (без изменений, как в предыдущей полной версии) ...
         updateSpeedSpinnersModelsAndValues();
-
-        // Затем устанавливаем состояния кнопок и значения для времени
         speedDeterministicRadio.setSelected(!params.isRandomSpeedFlow());
         speedRandomRadio.setSelected(params.isRandomSpeedFlow());
-        // speedDetValueSpinner.setValue(params.getDeterministicSpeedKmh()); // Уже установлено в updateSpeedSpinnersModelsAndValues
-
         DistributionLaw speedLaw = params.getSpeedDistributionLaw() != null ? params.getSpeedDistributionLaw() : DistributionLaw.NORMAL;
         speedLawUniform.setSelected(speedLaw == DistributionLaw.UNIFORM);
         speedLawNormal.setSelected(speedLaw == DistributionLaw.NORMAL);
@@ -312,12 +307,9 @@ public class ModelingSettingsDialog extends JDialog {
         if (params.isRandomSpeedFlow() && !speedLawUniform.isSelected() && !speedLawNormal.isSelected() && !speedLawExponential.isSelected()) {
             speedLawNormal.setSelected(true);
         }
-        // Значения speedUniformMin/Max/NormalMean также установлены в updateSpeedSpinnersModelsAndValues
-
         timeDeterministicRadio.setSelected(!params.isRandomTimeFlow());
         timeRandomRadio.setSelected(params.isRandomTimeFlow());
         timeDetValueSpinner.setValue(params.getDeterministicIntervalSeconds());
-
         DistributionLaw timeLaw = params.getTimeDistributionLaw() != null ? params.getTimeDistributionLaw() : DistributionLaw.NORMAL;
         timeLawUniform.setSelected(timeLaw == DistributionLaw.UNIFORM);
         timeLawNormal.setSelected(timeLaw == DistributionLaw.NORMAL);
@@ -325,20 +317,18 @@ public class ModelingSettingsDialog extends JDialog {
         if (params.isRandomTimeFlow() && !timeLawUniform.isSelected() && !timeLawNormal.isSelected() && !timeLawExponential.isSelected()) {
             timeLawNormal.setSelected(true);
         }
-
         timeUniformMinSpinner.setValue(params.getTimeUniformMinSec());
         timeUniformMaxSpinner.setValue(params.getTimeUniformMaxSec());
         timeNormalMeanSpinner.setValue(params.getTimeNormalMeanSec());
         timeNormalVarianceSpinner.setValue(params.getTimeNormalVarianceSec());
         timeExponentialIntensitySpinner.setValue(params.getTimeExponentialIntensityPerSec());
-
         updateSpeedSettingsVisibility();
         updateTimeSettingsVisibility();
     }
 
     private void saveAndClose() {
-        System.out.println("[DEBUG] ModelingSettingsDialog.saveAndClose: Validating with RoadType from params = " + params.getRoadType());
-        // Валидация скорости
+        // ... (без изменений, как в предыдущей полной версии) ...
+        if (DETAILED_LOGGING_MSD) System.out.println("[DEBUG] MSD.saveAndClose: Validating with RoadType from params = " + params.getRoadType());
         if (speedDeterministicRadio.isSelected()) {
             double detSpeedValue = ((Number) speedDetValueSpinner.getValue()).doubleValue();
             SpinnerNumberModel detSpeedModel = (SpinnerNumberModel) speedDetValueSpinner.getModel();
@@ -354,7 +344,7 @@ public class ModelingSettingsDialog extends JDialog {
             if (speedLawUniform.isSelected()) {
                 double minSpeed = ((Number) speedUniformMinSpinner.getValue()).doubleValue();
                 double maxSpeed = ((Number) speedUniformMaxSpinner.getValue()).doubleValue();
-                SpinnerNumberModel uniformMinModel = (SpinnerNumberModel) speedUniformMinSpinner.getModel(); // Берем актуальную модель
+                SpinnerNumberModel uniformMinModel = (SpinnerNumberModel) speedUniformMinSpinner.getModel();
                 if (minSpeed < (Double)uniformMinModel.getMinimum() || maxSpeed > (Double)uniformMinModel.getMaximum() || minSpeed > maxSpeed) {
                     JOptionPane.showMessageDialog(this, "Границы равномерного распределения скорости некорректны или выходят за пределы ("+ String.format("%.0f", (Double)uniformMinModel.getMinimum()) +"-"+ String.format("%.0f", (Double)uniformMinModel.getMaximum()) +") для типа дороги: " + params.getRoadType().getDisplayName() + "!", "Ошибка ввода", JOptionPane.ERROR_MESSAGE);
                     return;
@@ -369,8 +359,6 @@ public class ModelingSettingsDialog extends JDialog {
                 }
             }
         }
-
-        // Валидация времени
         if (timeRandomRadio.isSelected()) {
             if (!timeLawUniform.isSelected() && !timeLawNormal.isSelected() && !timeLawExponential.isSelected()){
                 JOptionPane.showMessageDialog(this, "Для случайного потока времени не выбран закон распределения!", "Ошибка ввода", JOptionPane.ERROR_MESSAGE);
@@ -385,8 +373,6 @@ public class ModelingSettingsDialog extends JDialog {
                 }
             }
         }
-
-        // Сохранение параметров скорости
         params.setRandomSpeedFlow(speedRandomRadio.isSelected());
         if (params.isRandomSpeedFlow()){
             if(speedLawUniform.isSelected()) params.setSpeedDistributionLaw(DistributionLaw.UNIFORM);
@@ -400,8 +386,6 @@ public class ModelingSettingsDialog extends JDialog {
         } else {
             params.setDeterministicSpeedKmh(((Number) speedDetValueSpinner.getValue()).doubleValue());
         }
-
-        // Сохранение параметров времени
         params.setRandomTimeFlow(timeRandomRadio.isSelected());
         if (params.isRandomTimeFlow()){
             if(timeLawUniform.isSelected()) params.setTimeDistributionLaw(DistributionLaw.UNIFORM);
@@ -415,16 +399,13 @@ public class ModelingSettingsDialog extends JDialog {
         } else {
             params.setDeterministicIntervalSeconds(((Number) timeDetValueSpinner.getValue()).doubleValue());
         }
-
         settingsSaved = true;
         dispose();
     }
 
     public boolean showDialog() {
-        // СНАЧАЛА обновляем модели и значения спиннеров скорости на основе ТЕКУЩЕГО типа дороги в params
         updateSpeedSpinnersModelsAndValues();
-        // ЗАТЕМ загружаем все остальные сохраненные значения из params в элементы GUI (кнопки, время и т.д.)
-        loadParameters(); // loadParameters теперь не должен вызывать updateSpeedSpinners... повторно
+        loadParameters();
         setVisible(true);
         return settingsSaved;
     }

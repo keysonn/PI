@@ -1,99 +1,86 @@
 package com.trafficsimulation.model;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 public class TrafficLight {
-
-    private static int idCounter = 0;
-
-    private final int id;
-    private final double position;
-    private final double redDuration;
-    private final double greenDuration;
+    private static final AtomicLong idCounter = new AtomicLong(0);
+    private final long id;
+    private double position; // meters
+    private double redDuration; // seconds
+    private double greenDuration; // seconds
+    private TrafficLightState initialState; // Начальное состояние при сбросе
     private TrafficLightState currentState;
-    private double timeInCurrentState;
-    private final int targetDirection; // 0 для направления ->, 1 для направления <-, -1 для обоих (если применимо)
+    private double remainingTimeInState; // seconds
+    private int targetDirection; // 0 for dir0 (L->R on screen bottom), 1 for dir1 (R->L on screen top), -1 for both (tunnel system lights)
+    private boolean externallyControlled = false; // true for tunnel lights
 
-    private boolean externallyControlled = false;
-
-    public TrafficLight(double position, double redDuration, double greenDuration,
-                        TrafficLightState initialState, int targetDirection) {
-        this.id = idCounter++;
+    public TrafficLight(double position, double redDuration, double greenDuration, TrafficLightState initialState, int targetDirection) {
+        this.id = idCounter.incrementAndGet();
         this.position = position;
-        // Валидация длительностей фаз из ТЗ (20-100 секунд)
-        this.redDuration = Math.max(20.0, Math.min(redDuration, 100.0));
-        this.greenDuration = Math.max(20.0, Math.min(greenDuration, 100.0));
-
-        if (initialState == null || (initialState != TrafficLightState.RED && initialState != TrafficLightState.GREEN)) {
-            this.currentState = TrafficLightState.RED; // Безопасное начальное состояние
-        } else {
-            this.currentState = initialState;
-        }
-
+        this.redDuration = Math.max(20, Math.min(redDuration, 100)); // Ensure bounds
+        this.greenDuration = Math.max(20, Math.min(greenDuration, 100)); // Ensure bounds
+        this.initialState = initialState;
         this.targetDirection = targetDirection;
-        this.timeInCurrentState = 0.0;
-        // System.out.println("Создан TrafficLight ID=" + this.id + " на поз. " + String.format("%.1f",this.position) +
-        //                    " для напр. " + this.targetDirection + " с сост. " + this.currentState);
+        resetToInitialState(); // Устанавливаем начальное состояние и таймер
     }
 
     public void update(double deltaTime) {
         if (externallyControlled) {
-            // Если светофор управляется извне, его собственный таймер и логика переключения не работают.
-            // Но время в текущем состоянии все равно отслеживается для getRemainingTime.
-            timeInCurrentState += deltaTime;
+            // Если управляется извне, просто уменьшаем таймер для отображения,
+            // фактическая смена состояния будет через setCurrentState.
+            if (remainingTimeInState > 0) {
+                remainingTimeInState -= deltaTime;
+                if (remainingTimeInState < 0) remainingTimeInState = 0;
+            }
             return;
         }
 
-        timeInCurrentState += deltaTime;
-        switch (currentState) {
-            case GREEN:
-                if (timeInCurrentState >= greenDuration) {
-                    currentState = TrafficLightState.RED;
-                    timeInCurrentState = 0;
-                }
-                break;
-            case RED:
-                if (timeInCurrentState >= redDuration) {
-                    currentState = TrafficLightState.GREEN;
-                    timeInCurrentState = 0;
-                }
-                break;
-        }
-    }
-
-    public void setCurrentState(TrafficLightState newState, boolean resetTimer) {
-        if (this.currentState != newState || resetTimer) {
-            this.currentState = newState;
-            if (resetTimer) {
-                this.timeInCurrentState = 0.0;
+        remainingTimeInState -= deltaTime;
+        if (remainingTimeInState <= 0) {
+            if (currentState == TrafficLightState.GREEN) {
+                currentState = TrafficLightState.RED;
+                remainingTimeInState = redDuration + remainingTimeInState; // Добавляем остаток времени
+            } else {
+                currentState = TrafficLightState.GREEN;
+                remainingTimeInState = greenDuration + remainingTimeInState; // Добавляем остаток времени
             }
+            if (remainingTimeInState < 0) remainingTimeInState = 0; // Убедимся, что не отрицательное
         }
     }
 
-    public void setExternallyControlled(boolean controlled) {
-        this.externallyControlled = controlled;
-    }
-
-    // Геттер для флага внешнего управления (ИЗМЕНЕНИЕ: ДОБАВЛЕН МЕТОД)
-    public boolean isExternallyControlled() {
-        return externallyControlled;
-    }
-
-    public double getRemainingTime() {
-        if (currentState == TrafficLightState.GREEN) {
-            return Math.max(0, greenDuration - timeInCurrentState);
-        } else if (currentState == TrafficLightState.RED) {
-            return Math.max(0, redDuration - timeInCurrentState);
+    public void setCurrentState(TrafficLightState newState, boolean resetTimerForThisState) {
+        this.currentState = newState;
+        if (resetTimerForThisState) {
+            this.remainingTimeInState = (newState == TrafficLightState.GREEN) ? greenDuration : redDuration;
         }
-        return 0; // Не должно произойти при корректных состояниях
     }
 
-    public int getTargetDirection() { return targetDirection; }
-    public int getId() { return id; }
+    // Новый метод для сброса таймера к заданной длительности
+    public void resetTimer(double duration) {
+        this.remainingTimeInState = duration;
+    }
+
+    // Новый метод для сброса светофора в его начальное состояние
+    public void resetToInitialState() {
+        this.currentState = this.initialState;
+        if (this.currentState == TrafficLightState.GREEN) {
+            this.remainingTimeInState = greenDuration;
+        } else {
+            this.remainingTimeInState = redDuration;
+        }
+    }
+
+
+    public long getId() { return id; }
     public double getPosition() { return position; }
     public TrafficLightState getCurrentState() { return currentState; }
+    public double getRemainingTime() { return Math.max(0, remainingTimeInState); } // Не возвращаем отрицательное время
+    public int getTargetDirection() { return targetDirection; }
+    public boolean isExternallyControlled() { return externallyControlled; }
+    public void setExternallyControlled(boolean externallyControlled) { this.externallyControlled = externallyControlled; }
 
     @Override
     public String toString() {
-        return String.format("Light{id=%d, dir=%d, pos=%.1f, state=%s, extCtrl=%b, timeInState=%.1f, remains=%.1f}",
-                id, targetDirection, position, currentState, externallyControlled, timeInCurrentState, getRemainingTime());
+        return "TrafficLight{" + id + " pos=" + String.format("%.1f",position) + ", state=" + currentState + ", remT=" + String.format("%.1f",remainingTimeInState) + '}';
     }
 }
