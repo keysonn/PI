@@ -5,22 +5,33 @@ import com.trafficsimulation.simulation.SimulationParameters;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.ActionListener; // Добавлен импорт, т.к. используется ActionListener
 import java.awt.event.ItemEvent;
+
 
 public class RoadSettingsDialog extends JDialog {
 
-    private SimulationParameters params; // Ссылка на объект параметров
+    private SimulationParameters params;
     private boolean settingsSaved = false;
 
-    private JComboBox<RoadType> roadTypeComboBox;
-    private JRadioButton одностороннееRadioButton, двухстороннееRadioButton;
-    private ButtonGroup directionGroup;
-    private JSlider lanesPerDirectionSlider;
+    private JToggleButton cityRoadButton, highwayButton, tunnelButton;
+    private ButtonGroup roadTypeGroup;
 
-    // Элементы для тоннеля (кроме времени очистки)
-    private JLabel redLightDurationLabel, greenLightDurationLabel; // tunnelClearanceTimeLabel УДАЛЕН
-    private JSpinner redLightDurationSpinner, greenLightDurationSpinner; // tunnelClearanceTimeSpinner УДАЛЕН
-    private JPanel tunnelSpecificPanel; // Панель для специфичных настроек тоннеля
+    private JToggleButton одностороннееButton, двухстороннееButton;
+    private ButtonGroup directionGroup;
+
+    private JSlider lanesPerDirectionSlider;
+    private JLabel lanesLabel;
+    private JLabel directionLabel; // Метка для направления
+
+    private JLabel redLightDurationLabel, greenLightDurationLabel;
+    private JSpinner redLightDurationSpinner, greenLightDurationSpinner;
+    private JPanel tunnelSpecificPanel;
+    private JPanel nonTunnelSpecificPanel;
+
+    private final Dimension spinnerPreferredSize = new Dimension(70, 25);
+    private final Dimension dialogBaseMinimumSize = new Dimension(450, 280); // Базовый минимум
+
 
     public RoadSettingsDialog(Frame owner, SimulationParameters currentParams) {
         super(owner, "Настройка параметров автодороги", true);
@@ -30,160 +41,206 @@ public class RoadSettingsDialog extends JDialog {
         layoutComponents();
         addListeners();
 
-        loadParameters(); // Загружаем текущие параметры в диалог
-        updateFieldVisibility(currentParams.getRoadType()); // Обновляем видимость полей
+        loadParameters();
+        updateFieldVisibility();
 
         pack();
-        setMinimumSize(getPreferredSize()); // Чтобы нельзя было сделать меньше
+        Dimension packedSize = getSize();
+        setMinimumSize(new Dimension(Math.max(packedSize.width, dialogBaseMinimumSize.width),
+                Math.max(packedSize.height, dialogBaseMinimumSize.height)));
+        setResizable(false);
         setLocationRelativeTo(owner);
     }
 
     private void initComponents() {
-        roadTypeComboBox = new JComboBox<>(RoadType.values());
+        cityRoadButton = new JToggleButton(RoadType.CITY_ROAD.getDisplayName());
+        highwayButton = new JToggleButton(RoadType.HIGHWAY.getDisplayName());
+        tunnelButton = new JToggleButton(RoadType.TUNNEL.getDisplayName());
+        roadTypeGroup = new ButtonGroup();
+        roadTypeGroup.add(cityRoadButton);
+        roadTypeGroup.add(highwayButton);
+        roadTypeGroup.add(tunnelButton);
 
-        одностороннееRadioButton = new JRadioButton("Одностороннее");
-        двухстороннееRadioButton = new JRadioButton("Двустороннее");
+        directionLabel = new JLabel("Выберите направление движения:");
+        одностороннееButton = new JToggleButton("Одностороннее");
+        двухстороннееButton = new JToggleButton("Двустороннее");
         directionGroup = new ButtonGroup();
-        directionGroup.add(одностороннееRadioButton);
-        directionGroup.add(двухстороннееRadioButton);
+        directionGroup.add(одностороннееButton);
+        directionGroup.add(двухстороннееButton);
 
-        lanesPerDirectionSlider = new JSlider(1, 4, params.getLanesPerDirection());
+        lanesLabel = new JLabel("Выберите количество полос:");
+        lanesPerDirectionSlider = new JSlider(1, 4, 1); // Начальное значение 1
         lanesPerDirectionSlider.setMajorTickSpacing(1);
         lanesPerDirectionSlider.setPaintTicks(true);
         lanesPerDirectionSlider.setPaintLabels(true);
         lanesPerDirectionSlider.setSnapToTicks(true);
 
-        // Настройки для тоннеля
-        redLightDurationLabel = new JLabel("Длина красного света:");
-        redLightDurationSpinner = new JSpinner(new SpinnerNumberModel(30, 20, 100, 1)); // сек
-        greenLightDurationLabel = new JLabel("Длина зеленого света:");
-        greenLightDurationSpinner = new JSpinner(new SpinnerNumberModel(30, 20, 100, 1)); // сек
-
-        // tunnelClearanceTimeLabel и tunnelClearanceTimeSpinner УДАЛЕНЫ
+        redLightDurationLabel = new JLabel("Задайте длину красного света:");
+        redLightDurationSpinner = new JSpinner(new SpinnerNumberModel(30, 20, 100, 1));
+        redLightDurationSpinner.setPreferredSize(spinnerPreferredSize);
+        greenLightDurationLabel = new JLabel("Задайте длину зеленого света:");
+        greenLightDurationSpinner = new JSpinner(new SpinnerNumberModel(30, 20, 100, 1));
+        greenLightDurationSpinner.setPreferredSize(spinnerPreferredSize);
     }
 
     private void layoutComponents() {
         setLayout(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(5, 10, 5, 10);
-        gbc.anchor = GridBagConstraints.WEST;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
 
-        // Тип автодороги
-        gbc.gridx = 0; gbc.gridy = 0; add(new JLabel("Выберите тип автодороги:"), gbc);
-        gbc.gridx = 1; gbc.gridy = 0; gbc.fill = GridBagConstraints.HORIZONTAL; add(roadTypeComboBox, gbc);
+        // --- Строка 0: Метка "Выберите тип автодороги" ---
+        gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 2;
+        gbc.anchor = GridBagConstraints.CENTER; // Центрируем метку
+        add(new JLabel("Выберите тип автодороги:"), gbc);
 
-        // Направление движения (панель)
-        gbc.gridx = 0; gbc.gridy = 1; gbc.fill = GridBagConstraints.NONE; add(new JLabel("Направление движения:"), gbc);
-        JPanel directionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        directionPanel.add(одностороннееRadioButton);
-        directionPanel.add(двухстороннееRadioButton);
-        gbc.gridx = 1; gbc.gridy = 1; gbc.fill = GridBagConstraints.HORIZONTAL; add(directionPanel, gbc);
+        // --- Строка 1: Кнопки выбора типа дороги ---
+        JPanel roadTypeButtonsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0,0)); // Кнопки по центру, без отступов между ними
+        roadTypeButtonsPanel.add(cityRoadButton);
+        roadTypeButtonsPanel.add(highwayButton);
+        roadTypeButtonsPanel.add(tunnelButton);
+        gbc.gridy = 1;
+        add(roadTypeButtonsPanel, gbc);
+
+        gbc.gridwidth = 1; // Сброс для следующих элементов
+        gbc.anchor = GridBagConstraints.WEST; // Возвращаем выравнивание по умолчанию
+
+        // --- Панель для настроек НЕ-тоннеля ---
+        nonTunnelSpecificPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbcNonTunnel = new GridBagConstraints();
+        gbcNonTunnel.insets = new Insets(5, 0, 5, 0);
+        gbcNonTunnel.anchor = GridBagConstraints.WEST;
+
+        // Направление движения
+        gbcNonTunnel.gridx = 0; gbcNonTunnel.gridy = 0; gbcNonTunnel.fill = GridBagConstraints.NONE; gbcNonTunnel.weightx = 0.0; // Метка не растягивается
+        nonTunnelSpecificPanel.add(directionLabel, gbcNonTunnel);
+        JPanel directionButtonsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        directionButtonsPanel.add(одностороннееButton);
+        directionButtonsPanel.add(двухстороннееButton);
+        gbcNonTunnel.gridx = 1; gbcNonTunnel.fill = GridBagConstraints.HORIZONTAL; gbcNonTunnel.anchor = GridBagConstraints.EAST; gbcNonTunnel.weightx = 1.0; // Кнопки занимают остальное место
+        nonTunnelSpecificPanel.add(directionButtonsPanel, gbcNonTunnel);
 
         // Количество полос
-        gbc.gridx = 0; gbc.gridy = 2; gbc.fill = GridBagConstraints.NONE; add(new JLabel("Количество полос (в 1 напр.):"), gbc);
-        gbc.gridx = 1; gbc.gridy = 2; gbc.fill = GridBagConstraints.HORIZONTAL; add(lanesPerDirectionSlider, gbc);
+        gbcNonTunnel.gridx = 0; gbcNonTunnel.gridy = 1; gbcNonTunnel.fill = GridBagConstraints.NONE; gbcNonTunnel.weightx = 0.0;
+        nonTunnelSpecificPanel.add(lanesLabel, gbcNonTunnel);
+        gbcNonTunnel.gridx = 1; gbcNonTunnel.fill = GridBagConstraints.HORIZONTAL; gbcNonTunnel.anchor = GridBagConstraints.EAST; gbcNonTunnel.weightx = 1.0;
+        nonTunnelSpecificPanel.add(lanesPerDirectionSlider, gbcNonTunnel);
 
-        // Панель для специфичных настроек тоннеля
+        gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL;
+        add(nonTunnelSpecificPanel, gbc);
+
+        // --- Панель для специфичных настроек тоннеля ---
         tunnelSpecificPanel = new JPanel(new GridBagLayout());
         GridBagConstraints gbcTunnel = new GridBagConstraints();
-        gbcTunnel.insets = new Insets(2, 0, 2, 5); // Меньше отступы внутри панели
+        gbcTunnel.insets = new Insets(5, 0, 5, 0);
         gbcTunnel.anchor = GridBagConstraints.WEST;
+        gbcTunnel.gridy = 0;
 
-        gbcTunnel.gridx = 0; gbcTunnel.gridy = 0; tunnelSpecificPanel.add(redLightDurationLabel, gbcTunnel);
-        gbcTunnel.gridx = 1; gbcTunnel.gridy = 0; gbcTunnel.fill = GridBagConstraints.HORIZONTAL; tunnelSpecificPanel.add(redLightDurationSpinner, gbcTunnel);
-        gbcTunnel.gridx = 2; gbcTunnel.gridy = 0; gbcTunnel.fill = GridBagConstraints.NONE; tunnelSpecificPanel.add(new JLabel("секунд"), gbcTunnel);
+        gbcTunnel.gridx = 0; gbcTunnel.weightx = 0.3; gbcTunnel.fill = GridBagConstraints.HORIZONTAL;
+        tunnelSpecificPanel.add(redLightDurationLabel, gbcTunnel);
+        gbcTunnel.gridx = 1; gbcTunnel.weightx = 0.0; gbcTunnel.fill = GridBagConstraints.NONE; gbcTunnel.anchor = GridBagConstraints.EAST;
+        tunnelSpecificPanel.add(redLightDurationSpinner, gbcTunnel);
+        gbcTunnel.gridx = 2; gbcTunnel.weightx = 0.0; gbcTunnel.fill = GridBagConstraints.NONE; gbcTunnel.anchor = GridBagConstraints.WEST;
+        tunnelSpecificPanel.add(new JLabel("секунд"), gbcTunnel);
 
-        gbcTunnel.gridx = 0; gbcTunnel.gridy = 1; gbcTunnel.fill = GridBagConstraints.NONE; tunnelSpecificPanel.add(greenLightDurationLabel, gbcTunnel);
-        gbcTunnel.gridx = 1; gbcTunnel.gridy = 1; gbcTunnel.fill = GridBagConstraints.HORIZONTAL; tunnelSpecificPanel.add(greenLightDurationSpinner, gbcTunnel);
-        gbcTunnel.gridx = 2; gbcTunnel.gridy = 1; gbcTunnel.fill = GridBagConstraints.NONE; tunnelSpecificPanel.add(new JLabel("секунд"), gbcTunnel);
-
-        // Удалены строки для tunnelClearanceTimeLabel и tunnelClearanceTimeSpinner
+        gbcTunnel.gridy = 1;
+        gbcTunnel.gridx = 0; gbcTunnel.weightx = 0.3; gbcTunnel.fill = GridBagConstraints.HORIZONTAL; gbcTunnel.anchor = GridBagConstraints.WEST;
+        tunnelSpecificPanel.add(greenLightDurationLabel, gbcTunnel);
+        gbcTunnel.gridx = 1; gbcTunnel.weightx = 0.0; gbcTunnel.fill = GridBagConstraints.NONE; gbcTunnel.anchor = GridBagConstraints.EAST;
+        tunnelSpecificPanel.add(greenLightDurationSpinner, gbcTunnel);
+        gbcTunnel.gridx = 2; gbcTunnel.weightx = 0.0; gbcTunnel.fill = GridBagConstraints.NONE; gbcTunnel.anchor = GridBagConstraints.WEST;
+        tunnelSpecificPanel.add(new JLabel("секунд"), gbcTunnel);
 
         gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL;
         add(tunnelSpecificPanel, gbc);
 
-
-        // Кнопки
-        gbc.gridx = 0; gbc.gridy = 4; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE;
-        gbc.anchor = GridBagConstraints.CENTER;
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        // --- Кнопка Сохранить ---
+        gbc.gridy = 4; // Следующая строка
+        gbc.gridx = 0;
+        gbc.gridwidth = 2; // Растягиваем на 2 колонки
+        gbc.anchor = GridBagConstraints.CENTER; // Центрируем кнопку
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.insets = new Insets(20, 10, 10, 10);
         JButton saveButton = new JButton("Сохранить настройки");
         saveButton.addActionListener(e -> saveAndClose());
-        JButton cancelButton = new JButton("Отмена");
-        cancelButton.addActionListener(e -> { settingsSaved = false; dispose(); });
-        buttonPanel.add(saveButton);
-        buttonPanel.add(cancelButton);
-        gbc.insets = new Insets(15, 10, 5, 10); // Отступ сверху для кнопок
-        add(buttonPanel, gbc);
+        add(saveButton, gbc);
     }
 
     private void addListeners() {
-        roadTypeComboBox.addItemListener(e -> {
-            if (e.getStateChange() == ItemEvent.SELECTED) {
-                updateFieldVisibility((RoadType) e.getItem());
-            }
-        });
+        ActionListener roadTypeListener = e -> updateFieldVisibility();
+        cityRoadButton.addActionListener(roadTypeListener);
+        highwayButton.addActionListener(roadTypeListener);
+        tunnelButton.addActionListener(roadTypeListener);
     }
 
-    private void updateFieldVisibility(RoadType selectedType) {
+    private RoadType getSelectedRoadType() {
+        if (cityRoadButton.isSelected()) return RoadType.CITY_ROAD;
+        if (highwayButton.isSelected()) return RoadType.HIGHWAY;
+        if (tunnelButton.isSelected()) return RoadType.TUNNEL;
+        // Если ничего не выбрано (не должно быть из-за ButtonGroup),
+        // возвращаем текущее из параметров или дефолтное
+        return params.getRoadType() != null ? params.getRoadType() : RoadType.CITY_ROAD;
+    }
+
+    private void updateFieldVisibility() {
+        RoadType selectedType = getSelectedRoadType();
         boolean isTunnel = (selectedType == RoadType.TUNNEL);
-        boolean isNotTunnel = !isTunnel;
 
-        одностороннееRadioButton.setEnabled(isNotTunnel);
-        двухстороннееRadioButton.setEnabled(isNotTunnel);
-        lanesPerDirectionSlider.setEnabled(isNotTunnel);
-        // Если это тоннель, то количество направлений и полос фиксировано (2 и 1)
-        // Можно здесь принудительно установить эти значения, если они не были выбраны
+        nonTunnelSpecificPanel.setVisible(!isTunnel);
+        tunnelSpecificPanel.setVisible(isTunnel);
+
+        // Блокируем/разблокируем элементы в nonTunnelSpecificPanel
+        directionLabel.setEnabled(!isTunnel);
+        одностороннееButton.setEnabled(!isTunnel);
+        двухстороннееButton.setEnabled(!isTunnel);
+        lanesLabel.setEnabled(!isTunnel);
+        lanesPerDirectionSlider.setEnabled(!isTunnel);
+
         if(isTunnel) {
-            двухстороннееRadioButton.setSelected(true); // Тоннель всегда двухсторонний в нашей модели
-            lanesPerDirectionSlider.setValue(1); // И всегда одна полоса на направление
+            // Для тоннеля принудительно 2 направления, 1 полоса в GUI, если они были изменены
+            двухстороннееButton.setSelected(true);
+            lanesPerDirectionSlider.setValue(1);
         }
-
-
-        redLightDurationLabel.setVisible(isTunnel);
-        redLightDurationSpinner.setVisible(isTunnel);
-        greenLightDurationLabel.setVisible(isTunnel);
-        greenLightDurationSpinner.setVisible(isTunnel);
-        tunnelSpecificPanel.setVisible(isTunnel); // Показываем/скрываем всю панель
-
-        // Удалены строки для tunnelClearanceTimeLabel и tunnelClearanceTimeSpinner
-
-        pack(); // Перепаковываем диалог, чтобы подогнать размер под видимые компоненты
+        pack();
+        Dimension currentSize = getSize();
+        // Гарантируем, что окно не меньше нашего базового минимума И не меньше того, что вычислил pack
+        setMinimumSize(new Dimension(Math.max(dialogBaseMinimumSize.width, currentSize.width),
+                Math.max(dialogBaseMinimumSize.height, currentSize.height)));
+        if (currentSize.height < getMinimumSize().height || currentSize.width < getMinimumSize().width) {
+            setSize(getMinimumSize()); // Устанавливаем корректный минимальный размер
+        }
     }
-
 
     private void loadParameters() {
-        roadTypeComboBox.setSelectedItem(params.getRoadType());
+        RoadType currentType = params.getRoadType();
+        if (currentType == RoadType.CITY_ROAD) cityRoadButton.setSelected(true);
+        else if (currentType == RoadType.HIGHWAY) highwayButton.setSelected(true);
+        else if (currentType == RoadType.TUNNEL) tunnelButton.setSelected(true);
+        else cityRoadButton.setSelected(true);
 
-        if (params.getNumberOfDirections() == 1) {
-            одностороннееRadioButton.setSelected(true);
+        if (params.getNumberOfDirections() == 1 && currentType != RoadType.TUNNEL) {
+            одностороннееButton.setSelected(true);
         } else {
-            двухстороннееRadioButton.setSelected(true);
+            двухстороннееButton.setSelected(true);
         }
         lanesPerDirectionSlider.setValue(params.getLanesPerDirection());
 
-        // Загрузка параметров тоннеля
-        if (params.getRoadType() == RoadType.TUNNEL) {
-            redLightDurationSpinner.setValue(params.getTunnelDefaultRedDuration());
-            greenLightDurationSpinner.setValue(params.getTunnelDefaultGreenDuration());
-            // Загрузка для tunnelClearanceTimeSpinner УДАЛЕНА
-        }
-        // Обновляем видимость на основе загруженного типа
-        updateFieldVisibility(params.getRoadType());
+        redLightDurationSpinner.setValue(params.getTunnelDefaultRedDuration());
+        greenLightDurationSpinner.setValue(params.getTunnelDefaultGreenDuration());
     }
 
     private void saveAndClose() {
-        RoadType selectedRoadType = (RoadType) roadTypeComboBox.getSelectedItem();
+        RoadType selectedRoadType = getSelectedRoadType();
         params.setRoadType(selectedRoadType);
 
         if (selectedRoadType == RoadType.TUNNEL) {
-            params.setNumberOfDirections(2); // Принудительно для тоннеля
-            params.setLanesPerDirection(1);  // Принудительно для тоннеля
+            params.setNumberOfDirections(2);
+            params.setLanesPerDirection(1);
             params.setTunnelDefaultRedDuration(((Number) redLightDurationSpinner.getValue()).doubleValue());
             params.setTunnelDefaultGreenDuration(((Number) greenLightDurationSpinner.getValue()).doubleValue());
-            // Сохранение для tunnelClearanceTimeSpinner УДАЛЕНО
         } else {
-            params.setNumberOfDirections(одностороннееRadioButton.isSelected() ? 1 : 2);
+            params.setNumberOfDirections(одностороннееButton.isSelected() ? 1 : 2);
             params.setLanesPerDirection(lanesPerDirectionSlider.getValue());
         }
 
@@ -192,7 +249,8 @@ public class RoadSettingsDialog extends JDialog {
     }
 
     public boolean showDialog() {
-        // loadParameters(); // Вызывается теперь из конструктора и при смене типа
+        loadParameters();
+        updateFieldVisibility();
         setVisible(true);
         return settingsSaved;
     }
