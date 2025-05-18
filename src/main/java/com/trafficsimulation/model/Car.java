@@ -67,6 +67,10 @@ public class Car {
     private boolean committedToChangeRight = false;
     private int committedTargetLane = -1;
 
+    private boolean isBraking = false;
+    private static final double BRAKING_THRESHOLD = -0.5;
+
+
     public Car(double initialPosition, double initialSpeed, double personalMaxSpeedMs,
                DriverType driverType,
                int localLaneIndex, int direction) {
@@ -142,6 +146,9 @@ public class Car {
         }
         double finalAcceleration = freeRoadTerm + finalInteraction;
         finalAcceleration = Math.max(-actualBaseDecelerationParam * 2.5, Math.min(finalAcceleration, actualAccelerationParam));
+
+        isBraking = (finalAcceleration < BRAKING_THRESHOLD);
+
         double previousSpeed = this.currentSpeed;
         this.currentSpeed += finalAcceleration * deltaTime;
         this.currentSpeed = Math.max(0, this.currentSpeed);
@@ -153,7 +160,7 @@ public class Car {
             double averageSpeedForInterval = (previousSpeed + this.currentSpeed) / 2.0;
             double deltaPos = averageSpeedForInterval * deltaTime;
             if (this.direction == 0) { this.position += deltaPos; } else { this.position -= deltaPos; }
-        } else { this.currentSpeed = 0; }
+        } else { this.currentSpeed = 0; isBraking = false; }
     }
 
     public boolean canConsiderLaneChange() {
@@ -166,14 +173,12 @@ public class Car {
                                  boolean overallSafetyLeft, boolean overallSafetyRight,
                                  boolean leftChangeHurtsOthersTooMuch, boolean rightChangeHurtsOthersTooMuch,
                                  int lanesPerDirection, double roadTypeDefaultSpeedMs, double roadTypeMaxSpeedMs) {
-
         if (!canConsiderLaneChange()) {
             resetCommitments();
             return;
         }
         resetCommitments();
         timeSinceLastLaneChangeDecision = 0.0;
-
         int optimalLaneIndex = 0;
         if (lanesPerDirection > 1) {
             if (driverType == DriverType.AGGRESSIVE && this.desiredSpeed > roadTypeDefaultSpeedMs * 1.05 && !isCurrentLaneTheLeftmost) {
@@ -186,20 +191,17 @@ public class Car {
                 if (this.desiredSpeed >= roadTypeMaxSpeedMs * 0.80 && !isCurrentLaneTheLeftmost) {
                     optimalLaneIndex = lanesPerDirection - 1;
                 } else if (this.desiredSpeed > roadTypeDefaultSpeedMs * 1.05 && currentLaneIndex < lanesPerDirection - 1) {
-                    if (lanesPerDirection > 2) optimalLaneIndex = Math.min(currentLaneIndex + 1 + random.nextInt(lanesPerDirection - (currentLaneIndex + 1)), lanesPerDirection - 1);
+                    if (lanesPerDirection > 2) optimalLaneIndex = Math.min(currentLaneIndex + 1 + random.nextInt(Math.max(1, lanesPerDirection - (currentLaneIndex + 1))), lanesPerDirection - 1); // Было /2 + 1, изменил для большего разброса влево
                     else optimalLaneIndex = lanesPerDirection - 1;
                 } else {
                     optimalLaneIndex = 0;
                 }
             }
         }
-
         double bestGain = -Double.MAX_VALUE;
         int bestTargetLane = -1;
-
         double currentAccelGainThresholdOvertake = BASE_ACCEL_GAIN_THRESHOLD_OVERTAKE;
         double currentAccelGainThresholdRegular = BASE_ACCEL_GAIN_THRESHOLD_REGULAR;
-
         if (driverType == DriverType.AGGRESSIVE) {
             currentAccelGainThresholdOvertake *= 0.7; currentAccelGainThresholdRegular *= 0.7;
         } else if (driverType == DriverType.CAUTIOUS) {
@@ -208,12 +210,10 @@ public class Car {
         if (currentSpeed < desiredSpeed * 0.5 && ownCurrentAcceleration < 0) {
             currentAccelGainThresholdOvertake *= 0.5; currentAccelGainThresholdRegular *= 0.5;
         }
-
         if (!isCurrentLaneTheLeftmost && leftLanePotentialAccel != null && overallSafetyLeft && !leftChangeHurtsOthersTooMuch) {
             double gainLeft = leftLanePotentialAccel - ownCurrentAcceleration - LANE_CHANGE_MANEUVER_COST;
             if (currentLaneIndex + 1 == optimalLaneIndex) gainLeft += OPTIMAL_LANE_BIAS_ACCEL;
             double effectiveOvertakeThreshold = (driverType == DriverType.AGGRESSIVE && gainLeft > 0) ? currentAccelGainThresholdOvertake * 0.8 : currentAccelGainThresholdOvertake;
-
             if (gainLeft > effectiveOvertakeThreshold) {
                 if (gainLeft > bestGain) {
                     bestGain = gainLeft;
@@ -221,7 +221,6 @@ public class Car {
                 }
             }
         }
-
         if (!isCurrentLaneTheRightmost && rightLanePotentialAccel != null && overallSafetyRight && !rightChangeHurtsOthersTooMuch) {
             double gainRight = rightLanePotentialAccel - ownCurrentAcceleration - LANE_CHANGE_MANEUVER_COST;
             if (currentLaneIndex - 1 == optimalLaneIndex) {
@@ -230,7 +229,6 @@ public class Car {
                 gainRight += RIGHTMOST_LANE_BIAS_ACCEL;
             }
             double effectiveRegularThreshold = (driverType == DriverType.CAUTIOUS && gainRight > -0.1) ? currentAccelGainThresholdRegular * 0.5 : currentAccelGainThresholdRegular;
-
             if (gainRight > effectiveRegularThreshold) {
                 if (gainRight > bestGain) {
                     bestGain = gainRight;
@@ -238,7 +236,6 @@ public class Car {
                 }
             }
         }
-
         if (bestTargetLane != -1) {
             if (bestTargetLane > currentLaneIndex) this.committedToChangeLeft = true;
             else this.committedToChangeRight = true;
@@ -288,10 +285,12 @@ public class Car {
     public double getActualBaseDecelerationParam() { return actualBaseDecelerationParam; }
     public double getActualSafeTimeHeadway() { return actualSafeTimeHeadway; }
     public DriverType getDriverType() { return driverType; }
+    public boolean isBraking() { return isBraking; }
 
     @Override
     public String toString() {
-        return String.format("Car{id=%d, %s, dir=%d, locLane=%d, pos=%.1f, spd=%.1f (ds=%.1f), commitT=%d}",
-                id, driverType, direction, currentLaneIndex, position, currentSpeed * 3.6, desiredSpeed*3.6, committedTargetLane);
+        return String.format("Car{id=%d, %s, dir=%d, locLane=%d, pos=%.1f, spd=%.1f (ds=%.1f), brake=%b, commitT=%d}",
+                id, driverType, direction, currentLaneIndex, position, currentSpeed * 3.6, desiredSpeed*3.6,
+                isBraking, committedTargetLane);
     }
 }
