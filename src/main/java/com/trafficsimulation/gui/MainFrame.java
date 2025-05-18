@@ -48,7 +48,7 @@ public class MainFrame extends JFrame {
 
 
     public MainFrame() {
-        setTitle("Система моделирования движения транспорта v1.5");
+        setTitle("TtafficSimulatiom");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
         setPreferredSize(new Dimension(1000, 700));
