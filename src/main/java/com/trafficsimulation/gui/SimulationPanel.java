@@ -142,7 +142,6 @@ public class SimulationPanel extends JPanel {
     }
 
     private void drawRoadObjects(Graphics2D g2d, int roadVisualTopY, int currentRoadRenderHeight) {
-        // ... (код без изменений, как в предыдущей полной версии SimulationPanel) ...
         int panelWidth = getWidth();
         if (road.getTrafficLights() != null) {
             for (TrafficLight light : road.getTrafficLights()) {
@@ -181,7 +180,6 @@ public class SimulationPanel extends JPanel {
     }
 
     private void drawTrafficLight(Graphics2D g2d, TrafficLight light, int screenX, int screenY_signal_top, int roadVisualTopY, int currentRoadRenderHeight, boolean isAboveRoad) {
-        // ... (код без изменений, как в предыдущей полной версии SimulationPanel) ...
         int signalDiameter = TRAFFIC_LIGHT_VISUAL_WIDTH;
         g2d.setColor(TRAFFIC_LIGHT_POLE_COLOR);
         int poleX = screenX + signalDiameter / 2 - 2;
@@ -198,7 +196,7 @@ public class SimulationPanel extends JPanel {
     }
 
     private void drawCar(Graphics2D g2d, Car car, int roadVisualTopY, int laneVisualHeight) {
-        // ... (код без изменений, как в предыдущей полной версии SimulationPanel) ...
+
         int panelWidth = getWidth();
         int carScreenX = (int) ((car.getPosition() / road.getLength()) * panelWidth) - CAR_RENDER_WIDTH / 2;
         int globalLaneForDrawing = road.getGlobalLaneIndexForDrawing(car.getCurrentLaneIndex(), car.getDirection());
@@ -243,7 +241,6 @@ public class SimulationPanel extends JPanel {
     }
 
     private void drawInfoPanel(Graphics2D g2d) {
-        // ... (код без изменений, как в предыдущей полной версии SimulationPanel) ...
         g2d.setColor(new Color(0,0,0,150));
         g2d.fillRect(5,5, 250, 50);
         g2d.setColor(Color.WHITE);
@@ -258,7 +255,6 @@ public class SimulationPanel extends JPanel {
     }
 
     private void drawPlacementHint(Graphics2D g2d, int currentRoadRenderHeight) {
-        // ... (код без изменений, как в предыдущей полной версии SimulationPanel) ...
         if (placementModeActive && placementHint != null) {
             g2d.setColor(new Color(0,0,200, 200));
             g2d.setFont(new Font("Arial", Font.BOLD, 14));
@@ -279,7 +275,6 @@ public class SimulationPanel extends JPanel {
     }
 
     private void drawRoadSign(Graphics2D g2d, RoadSign sign, int screenX, int screenY_sign_top, int roadVisualTopY, int currentRoadRenderHeight, boolean isAboveRoad) {
-        // ... (код без изменений, как в предыдущей полной версии SimulationPanel) ...
         g2d.setColor(ROAD_SIGN_POLE_COLOR);
         int poleX = screenX + ROAD_SIGN_SIZE / 2 - 2;
         if (isAboveRoad) g2d.fillRect(poleX, roadVisualTopY - ROAD_SIGN_POLE_HEIGHT - OBJECT_SIDE_OFFSET, 4, ROAD_SIGN_POLE_HEIGHT);

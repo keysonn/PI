@@ -67,8 +67,6 @@ public class Car {
     private boolean committedToChangeRight = false;
     private int committedTargetLane = -1;
 
-    private static final boolean CAR_DEBUG_LOGGING = false;
-
     public Car(double initialPosition, double initialSpeed, double personalMaxSpeedMs,
                DriverType driverType,
                int localLaneIndex, int direction) {
@@ -112,7 +110,6 @@ public class Car {
                 this.committedToChangeRight = false;
                 this.committedTargetLane = -1;
                 timeSinceChangeCompleted = 0.0;
-                if (CAR_DEBUG_LOGGING) System.out.printf("Car %d FINISHED LC to %d%n", id, currentLaneIndex);
             }
         }
 
@@ -255,7 +252,6 @@ public class Car {
             if (this.committedTargetLane == targetLocalLane) {
                 startLaneChange(targetLocalLane);
             } else {
-                if (CAR_DEBUG_LOGGING) System.err.printf("Car %d: Mismatch in committed target (%d) and approved target (%d)%n", id, committedTargetLane, targetLocalLane);
                 resetCommitments();
             }
         }

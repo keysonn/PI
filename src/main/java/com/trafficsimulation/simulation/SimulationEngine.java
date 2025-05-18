@@ -34,10 +34,6 @@ public class SimulationEngine implements Runnable {
     private TrafficLight tunnelLightDir0;
     private TrafficLight tunnelLightDir1;
 
-    private static final boolean ENGINE_DEBUG_LOGGING = true; // Включим для отладки расчета
-    private static final double TUNNEL_CLEARANCE_TIME_SAFETY_FACTOR = 1.15; // 15% запас времени
-
-
     public SimulationEngine(SimulationParameters params, SimulationPanel panel) {
         this.parameters = params;
         this.simulationPanel = panel;
@@ -45,8 +41,6 @@ public class SimulationEngine implements Runnable {
     }
 
     public void performFullInitialization() {
-        // ... (без изменений, как в предыдущей полной версии) ...
-        if (ENGINE_DEBUG_LOGGING) System.out.println("SimulationEngine: Performing Full Initialization.");
         boolean isTunnelActive = (parameters.getRoadType() == RoadType.TUNNEL);
 
         if (isTunnelActive) {
@@ -73,7 +67,6 @@ public class SimulationEngine implements Runnable {
 
         if (isTunnelActive) {
             double roadModelLength = this.road.getLength();
-            // Используем новые позиции 0.1 и 0.9
             double leftLightPosition = roadModelLength * 0.1;
             double rightLightPosition = roadModelLength * 0.9;
 
@@ -87,39 +80,13 @@ public class SimulationEngine implements Runnable {
 
             tunnelControlState = TunnelControlState.DIR0_GREEN;
             tunnelPhaseTimer = parameters.getTunnelDefaultGreenDuration();
-            if (ENGINE_DEBUG_LOGGING) System.out.println("Tunnel activated. Initial state: DIR0_GREEN (model_dir 0 L->R). Timer: " + tunnelPhaseTimer);
         }
         if (simulationPanel != null) {
             simulationPanel.updateSimulationState(this.road, this.simulationTime);
         }
     }
 
-    private double calculateDynamicTunnelClearanceTime() {
-        if (road == null || road.getType() != RoadType.TUNNEL) {
-            return 15.0; // Значение по умолчанию, если что-то не так
-        }
-        // Длина активной зоны тоннеля (между 0.1L и 0.9L) = 0.8 * L
-        double activeZoneLength = road.getLength() * 0.8;
-        double minSpeedInTunnelMs = RoadType.TUNNEL.getMinSpeedLimitMs();
-
-        if (minSpeedInTunnelMs <= 0.1) { // Защита от деления на ноль или очень малую скорость
-            minSpeedInTunnelMs = 5.0 / 3.6; // Примерно 5 км/ч, если не задано
-            if (ENGINE_DEBUG_LOGGING) System.out.println("Tunnel Clearance: Min speed in tunnel was too low, using default 5km/h.");
-        }
-
-        double calculatedTime = activeZoneLength / minSpeedInTunnelMs;
-        calculatedTime *= TUNNEL_CLEARANCE_TIME_SAFETY_FACTOR; // Добавляем запас
-
-        if (ENGINE_DEBUG_LOGGING) {
-            System.out.printf("Tunnel Clearance Time Calculated: ActiveZone=%.1fm, MinSpeed=%.1fm/s (%.1fkm/h), RawTime=%.1fs, WithFactor=%.1fs%n",
-                    activeZoneLength, minSpeedInTunnelMs, minSpeedInTunnelMs * 3.6, activeZoneLength / minSpeedInTunnelMs, calculatedTime);
-        }
-        return Math.max(5.0, calculatedTime); // Минимальное время очистки - 5 секунд
-    }
-
     private void resetSimulationStateOnly() {
-        // ... (сброс машин, времени, генератора - без изменений) ...
-        if (ENGINE_DEBUG_LOGGING) System.out.println("SimulationEngine: Resetting simulation state (cars, time).");
         this.simulationTime = 0.0;
         if (this.road != null && this.road.getCars() != null) {
             this.road.getCars().clear();
@@ -139,6 +106,7 @@ public class SimulationEngine implements Runnable {
                 }
             }
         }
+
         if (simulationPanel != null) {
             simulationPanel.updateSimulationState(this.road, this.simulationTime);
         }
@@ -152,67 +120,68 @@ public class SimulationEngine implements Runnable {
         tunnelLightDir1.update(deltaTime);
 
         if (tunnelPhaseTimer <= 0) {
-            double dynamicClearanceTime = calculateDynamicTunnelClearanceTime(); // Рассчитываем здесь
+            double dynamicClearanceTime = calculateDynamicTunnelClearanceTime();
 
             switch (tunnelControlState) {
                 case DIR0_GREEN:
                     tunnelControlState = TunnelControlState.DIR0_CLEARING;
-                    tunnelPhaseTimer = dynamicClearanceTime; // Используем рассчитанное время
+                    tunnelPhaseTimer = dynamicClearanceTime;
                     tunnelLightDir0.setCurrentState(TrafficLightState.RED, true);
-                    if (ENGINE_DEBUG_LOGGING) System.out.println("Tunnel: DIR0_GREEN -> DIR0_CLEARING. Clearance Timer: " + String.format("%.1f", tunnelPhaseTimer) + "s");
                     break;
                 case DIR0_CLEARING:
-                    // Даем чуть больше времени, если машины еще есть, но не бесконечно
-                    if (!areCarsInTunnelActiveZone(0) || tunnelPhaseTimer <= -dynamicClearanceTime * 0.1) { // небольшой отрицательный буфер
+                    if (!areCarsInTunnelActiveZone(0) || tunnelPhaseTimer <= -dynamicClearanceTime * 0.1) {
                         tunnelControlState = TunnelControlState.DIR1_GREEN;
                         tunnelPhaseTimer = parameters.getTunnelDefaultGreenDuration();
                         tunnelLightDir1.setCurrentState(TrafficLightState.GREEN, true);
-                        if (ENGINE_DEBUG_LOGGING) System.out.println("Tunnel: DIR0_CLEARING -> DIR1_GREEN. Green Timer: " + String.format("%.1f", tunnelPhaseTimer) + "s");
                     } else {
-                        // Не даем таймеру уйти слишком сильно в минус, если машины долго выезжают
                         tunnelPhaseTimer = Math.max(tunnelPhaseTimer, 0.1);
-                        if (ENGINE_DEBUG_LOGGING && areCarsInTunnelActiveZone(0)) System.out.println("Tunnel: DIR0_CLEARING - cars still in zone. Timer extended to: " + String.format("%.1f", tunnelPhaseTimer) + "s");
                     }
                     break;
                 case DIR1_GREEN:
                     tunnelControlState = TunnelControlState.DIR1_CLEARING;
-                    tunnelPhaseTimer = dynamicClearanceTime; // Используем рассчитанное время
+                    tunnelPhaseTimer = dynamicClearanceTime;
                     tunnelLightDir1.setCurrentState(TrafficLightState.RED, true);
-                    if (ENGINE_DEBUG_LOGGING) System.out.println("Tunnel: DIR1_GREEN -> DIR1_CLEARING. Clearance Timer: " + String.format("%.1f", tunnelPhaseTimer) + "s");
                     break;
                 case DIR1_CLEARING:
                     if (!areCarsInTunnelActiveZone(1) || tunnelPhaseTimer <= -dynamicClearanceTime * 0.1) {
                         tunnelControlState = TunnelControlState.DIR0_GREEN;
                         tunnelPhaseTimer = parameters.getTunnelDefaultGreenDuration();
                         tunnelLightDir0.setCurrentState(TrafficLightState.GREEN, true);
-                        if (ENGINE_DEBUG_LOGGING) System.out.println("Tunnel: DIR1_CLEARING -> DIR0_GREEN. Green Timer: " + String.format("%.1f", tunnelPhaseTimer) + "s");
                     } else {
                         tunnelPhaseTimer = Math.max(tunnelPhaseTimer, 0.1);
-                        if (ENGINE_DEBUG_LOGGING && areCarsInTunnelActiveZone(1)) System.out.println("Tunnel: DIR1_CLEARING - cars still in zone. Timer extended to: " + String.format("%.1f", tunnelPhaseTimer) + "s");
                     }
                     break;
             }
         }
     }
 
+    private double calculateDynamicTunnelClearanceTime() {
+        if (road == null || road.getType() != RoadType.TUNNEL) {
+            return 15.0;
+        }
+        double activeZoneLength = road.getLength() * 0.8;
+        double minSpeedInTunnelMs = RoadType.TUNNEL.getMinSpeedLimitMs();
+        if (minSpeedInTunnelMs <= 0.1) {
+            minSpeedInTunnelMs = 5.0 / 3.6;
+        }
+        double calculatedTime = activeZoneLength / minSpeedInTunnelMs;
+        calculatedTime *= 1.15; // TUNNEL_CLEARANCE_TIME_SAFETY_FACTOR
+        return Math.max(5.0, calculatedTime);
+    }
+
+
     private boolean areCarsInTunnelActiveZone(int modelDirection) {
         if (road == null || road.getCars() == null) return false;
-        // Активная зона между 0.1L и 0.9L
         double entryZoneEdge = (modelDirection == 0) ? road.getLength() * 0.1 : road.getLength() * 0.9;
         double exitZoneEdge  = (modelDirection == 0) ? road.getLength() * 0.9 : road.getLength() * 0.1;
-        // Машина считается в активной зоне, если она строго между этими краями
-        // (не включая машины, стоящие точно на линии светофора или только что въехавшие на 1 пиксель)
-
         for (Car car : road.getCars()) {
             if (car.getDirection() == modelDirection) {
-                if (modelDirection == 0) { // L->R
-                    // Машина должна быть правее левого светофора и левее правого светофора
+                if (modelDirection == 0) {
                     if (car.getPosition() > entryZoneEdge + Car.APPROX_CAR_LENGTH * 0.1 &&
                             car.getPosition() < exitZoneEdge - Car.APPROX_CAR_LENGTH * 0.1) {
                         return true;
                     }
-                } else { // R->L
-                    // Машина должна быть левее правого светофора (большая позиция) и правее левого светофора (меньшая позиция)
+                } else {
                     if (car.getPosition() < entryZoneEdge - Car.APPROX_CAR_LENGTH * 0.1 &&
                             car.getPosition() > exitZoneEdge + Car.APPROX_CAR_LENGTH * 0.1) {
                         return true;
@@ -223,25 +192,19 @@ public class SimulationEngine implements Runnable {
         return false;
     }
 
-    // ... (startSimulation, stopSimulation, pauseSimulation, resumeSimulation, run, step и другие - БЕЗ ИЗМЕНЕНИЙ)
-    // Я привожу их для полноты, они уже должны быть исправлены.
     public void startSimulation() {
         if (running && !paused) return;
-
         if (simulationThread != null && simulationThread.isAlive()) {
             running = false;
             try { simulationThread.join(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         }
-
         if (!paused) {
             resetSimulationStateOnly();
         }
-
         running = true;
         paused = false;
         simulationThread = new Thread(this, "SimulationThread");
         simulationThread.start();
-        if(ENGINE_DEBUG_LOGGING) System.out.println("Поток симуляции запущен/возобновлен.");
     }
 
     public void stopSimulation() {
@@ -251,11 +214,10 @@ public class SimulationEngine implements Runnable {
             pauseLock.notifyAll();
         }
         resetSimulationStateOnly();
-        if(ENGINE_DEBUG_LOGGING) System.out.println("Симуляция остановлена. Машины очищены, время сброшено.");
     }
 
-    public void pauseSimulation() { if(running) paused = true; if(ENGINE_DEBUG_LOGGING) System.out.println("Симуляция на паузе."); }
-    public void resumeSimulation() { if(running && paused) { synchronized (pauseLock) { paused = false; pauseLock.notifyAll(); } if(ENGINE_DEBUG_LOGGING) System.out.println("Симуляция снята с паузы.");} }
+    public void pauseSimulation() { if(running) paused = true; }
+    public void resumeSimulation() { if(running && paused) { synchronized (pauseLock) { paused = false; pauseLock.notifyAll(); }} }
 
     @Override
     public void run() {
@@ -270,15 +232,12 @@ public class SimulationEngine implements Runnable {
                 }
             }
             if (!running) break;
-
             long loopStartTime = System.nanoTime();
             double deltaTimeFromLastFrame = (loopStartTime - lastUpdateTime) / 1_000_000_000.0;
             lastUpdateTime = loopStartTime;
             deltaTimeFromLastFrame = Math.min(deltaTimeFromLastFrame, 0.1);
             double simulationDeltaTime = deltaTimeFromLastFrame * parameters.getSimulationSpeedFactor();
-
             if (road != null) step(simulationDeltaTime);
-
             if (simulationPanel != null) {
                 Road currentRoadForPanel = road;
                 double currentSimTimeForPanel = simulationTime;
@@ -292,12 +251,11 @@ public class SimulationEngine implements Runnable {
                 catch (InterruptedException e) { Thread.currentThread().interrupt(); running = false; }
             } else { Thread.yield(); }
         }
-        if(ENGINE_DEBUG_LOGGING) System.out.println("Поток симуляции штатно завершил работу.");
     }
+
     private void step(double deltaTime) {
         if (deltaTime <= 0 || road == null) return;
         simulationTime += deltaTime;
-
         if (road.getType() == RoadType.TUNNEL) {
             updateTunnelLogic(deltaTime);
         } else {
@@ -308,7 +266,6 @@ public class SimulationEngine implements Runnable {
                 }
             }
         }
-
         if (flowGenerator != null) {
             TunnelControlState currentTunnelState = (road.getType() == RoadType.TUNNEL) ? this.tunnelControlState : null;
             Car[] newCars = flowGenerator.generateCars(deltaTime, currentTunnelState);
@@ -318,13 +275,11 @@ public class SimulationEngine implements Runnable {
                 }
             }
         }
-
         List<Car> currentCars = new ArrayList<>(road.getCars());
         currentCars.sort((car1, car2) -> {
             if (car1.getDirection() != car2.getDirection()) return Integer.compare(car1.getDirection(), car2.getDirection());
             return (car1.getDirection() == 0) ? Double.compare(car1.getPosition(), car2.getPosition()) : Double.compare(car2.getPosition(), car1.getPosition());
         });
-
         for (Car car : currentCars) {
             Car leadCar = findLeadCarOnLocalLane(car, car.getCurrentLaneIndex(), currentCars);
             double distanceToLead = (leadCar != null) ? Math.max(0.01, Math.abs(leadCar.getPosition() - car.getPosition()) - Car.APPROX_CAR_LENGTH) : Double.POSITIVE_INFINITY;
@@ -341,7 +296,6 @@ public class SimulationEngine implements Runnable {
             }
             car.update(deltaTime, leadCar, distanceToLead, effectiveSpeedLimit, nextLightState, distanceToLight);
         }
-
         if (road.getType() != RoadType.TUNNEL && road.getLanesPerDirection() > 1) {
             for (Car car : currentCars) {
                 if (car.canConsiderLaneChange()) {
@@ -349,7 +303,6 @@ public class SimulationEngine implements Runnable {
                 }
             }
         }
-
         if (road.getType() != RoadType.TUNNEL && road.getLanesPerDirection() > 1) {
             for (Car car : currentCars) {
                 if (!car.isChangingLane() && (car.isCommittedToChangeLeft() || car.isCommittedToChangeRight())) {
@@ -358,14 +311,12 @@ public class SimulationEngine implements Runnable {
                         if (isLaneChangeSafeAndNotConflicting(car, committedTargetLane, currentCars)) {
                             car.startLaneChangeIfCommitted(committedTargetLane);
                         } else {
-                            if (ENGINE_DEBUG_LOGGING) System.out.printf("Car %d: Aborting committed change to %d due to safety/conflict.%n", car.getId(), committedTargetLane);
                             car.resetCommitments();
                         }
                     }
                 }
             }
         }
-
         if (road.getCars() != null) {
             double removalBuffer = Car.APPROX_CAR_LENGTH * 3.0;
             road.getCars().removeIf(car ->
@@ -427,7 +378,6 @@ public class SimulationEngine implements Runnable {
         if (newFollower != null) {
             double distanceCarToNewFollower = Math.abs(carChanging.getPosition() - newFollower.getPosition()) - Car.APPROX_CAR_LENGTH;
             if (distanceCarToNewFollower < Car.MIN_GAP * 0.7) {
-                if (ENGINE_DEBUG_LOGGING) System.out.printf("Car %d: Follower %d on lane %d is too close (%.1fm) for safety check.%n", carChanging.getId(), newFollower.getId(), targetLocalLaneIndex, distanceCarToNewFollower);
                 return true;
             }
             double followerSpeed = newFollower.getCurrentSpeed();
@@ -447,7 +397,6 @@ public class SimulationEngine implements Runnable {
             }
             double potentialAccelerationFollower = freeRoadFollower + interactionFollower;
             if (potentialAccelerationFollower < (-Car.SAFE_DECELERATION_FOR_OTHERS + Car.POLITENESS_FACTOR * Car.SAFE_DECELERATION_FOR_OTHERS)) {
-                if (ENGINE_DEBUG_LOGGING) System.out.printf("Car %d: Follower %d on lane %d would brake at %.2f (limit %.2f). Change hurts too much.%n", carChanging.getId(), newFollower.getId(), targetLocalLaneIndex, potentialAccelerationFollower, (-Car.SAFE_DECELERATION_FOR_OTHERS + Car.POLITENESS_FACTOR * Car.SAFE_DECELERATION_FOR_OTHERS));
                 return true;
             }
         }
@@ -573,8 +522,6 @@ public class SimulationEngine implements Runnable {
     }
 
     public void updateParameters(SimulationParameters newParams) {
-        boolean wasRunningAndNotPaused = this.running && !this.paused;
-
         if (this.running) {
             running = false;
             synchronized(pauseLock){ pauseLock.notifyAll(); }
@@ -588,8 +535,6 @@ public class SimulationEngine implements Runnable {
         }
         this.parameters = newParams;
         performFullInitialization();
-
-        if (ENGINE_DEBUG_LOGGING) System.out.println("SimulationEngine: Параметры обновлены, симуляция полностью переинициализирована.");
     }
 
     public Road getRoad() { return road; }

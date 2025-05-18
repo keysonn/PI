@@ -5,7 +5,7 @@ import com.trafficsimulation.simulation.SimulationParameters;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionListener; // Добавлен импорт, т.к. используется ActionListener
+import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
 
 
@@ -22,7 +22,7 @@ public class RoadSettingsDialog extends JDialog {
 
     private JSlider lanesPerDirectionSlider;
     private JLabel lanesLabel;
-    private JLabel directionLabel; // Метка для направления
+    private JLabel directionLabel;
 
     private JLabel redLightDurationLabel, greenLightDurationLabel;
     private JSpinner redLightDurationSpinner, greenLightDurationSpinner;
@@ -30,7 +30,7 @@ public class RoadSettingsDialog extends JDialog {
     private JPanel nonTunnelSpecificPanel;
 
     private final Dimension spinnerPreferredSize = new Dimension(70, 25);
-    private final Dimension dialogBaseMinimumSize = new Dimension(450, 280); // Базовый минимум
+    private final Dimension dialogBaseMinimumSize = new Dimension(450, 300); // Увеличим немного мин. высоту
 
 
     public RoadSettingsDialog(Frame owner, SimulationParameters currentParams) {
@@ -69,7 +69,7 @@ public class RoadSettingsDialog extends JDialog {
         directionGroup.add(двухстороннееButton);
 
         lanesLabel = new JLabel("Выберите количество полос:");
-        lanesPerDirectionSlider = new JSlider(1, 4, 1); // Начальное значение 1
+        lanesPerDirectionSlider = new JSlider(1, 4, 1);
         lanesPerDirectionSlider.setMajorTickSpacing(1);
         lanesPerDirectionSlider.setPaintTicks(true);
         lanesPerDirectionSlider.setPaintLabels(true);
@@ -90,38 +90,35 @@ public class RoadSettingsDialog extends JDialog {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.weightx = 1.0;
 
-        // --- Строка 0: Метка "Выберите тип автодороги" ---
         gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 2;
-        gbc.anchor = GridBagConstraints.CENTER; // Центрируем метку
-        add(new JLabel("Выберите тип автодороги:"), gbc);
+        gbc.anchor = GridBagConstraints.CENTER;
+        JPanel roadTypePanelContainer = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        roadTypePanelContainer.add(new JLabel("Выберите тип автодороги:"));
+        add(roadTypePanelContainer, gbc);
 
-        // --- Строка 1: Кнопки выбора типа дороги ---
-        JPanel roadTypeButtonsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0,0)); // Кнопки по центру, без отступов между ними
+        JPanel roadTypeButtonsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0,0));
         roadTypeButtonsPanel.add(cityRoadButton);
         roadTypeButtonsPanel.add(highwayButton);
         roadTypeButtonsPanel.add(tunnelButton);
         gbc.gridy = 1;
         add(roadTypeButtonsPanel, gbc);
 
-        gbc.gridwidth = 1; // Сброс для следующих элементов
-        gbc.anchor = GridBagConstraints.WEST; // Возвращаем выравнивание по умолчанию
+        gbc.gridwidth = 1;
+        gbc.anchor = GridBagConstraints.WEST;
 
-        // --- Панель для настроек НЕ-тоннеля ---
         nonTunnelSpecificPanel = new JPanel(new GridBagLayout());
         GridBagConstraints gbcNonTunnel = new GridBagConstraints();
         gbcNonTunnel.insets = new Insets(5, 0, 5, 0);
         gbcNonTunnel.anchor = GridBagConstraints.WEST;
 
-        // Направление движения
-        gbcNonTunnel.gridx = 0; gbcNonTunnel.gridy = 0; gbcNonTunnel.fill = GridBagConstraints.NONE; gbcNonTunnel.weightx = 0.0; // Метка не растягивается
+        gbcNonTunnel.gridx = 0; gbcNonTunnel.gridy = 0; gbcNonTunnel.fill = GridBagConstraints.NONE; gbcNonTunnel.weightx = 0.0;
         nonTunnelSpecificPanel.add(directionLabel, gbcNonTunnel);
         JPanel directionButtonsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         directionButtonsPanel.add(одностороннееButton);
         directionButtonsPanel.add(двухстороннееButton);
-        gbcNonTunnel.gridx = 1; gbcNonTunnel.fill = GridBagConstraints.HORIZONTAL; gbcNonTunnel.anchor = GridBagConstraints.EAST; gbcNonTunnel.weightx = 1.0; // Кнопки занимают остальное место
+        gbcNonTunnel.gridx = 1; gbcNonTunnel.fill = GridBagConstraints.NONE; gbcNonTunnel.anchor = GridBagConstraints.EAST; gbcNonTunnel.weightx = 1.0;
         nonTunnelSpecificPanel.add(directionButtonsPanel, gbcNonTunnel);
 
-        // Количество полос
         gbcNonTunnel.gridx = 0; gbcNonTunnel.gridy = 1; gbcNonTunnel.fill = GridBagConstraints.NONE; gbcNonTunnel.weightx = 0.0;
         nonTunnelSpecificPanel.add(lanesLabel, gbcNonTunnel);
         gbcNonTunnel.gridx = 1; gbcNonTunnel.fill = GridBagConstraints.HORIZONTAL; gbcNonTunnel.anchor = GridBagConstraints.EAST; gbcNonTunnel.weightx = 1.0;
@@ -130,7 +127,6 @@ public class RoadSettingsDialog extends JDialog {
         gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL;
         add(nonTunnelSpecificPanel, gbc);
 
-        // --- Панель для специфичных настроек тоннеля ---
         tunnelSpecificPanel = new JPanel(new GridBagLayout());
         GridBagConstraints gbcTunnel = new GridBagConstraints();
         gbcTunnel.insets = new Insets(5, 0, 5, 0);
@@ -155,11 +151,10 @@ public class RoadSettingsDialog extends JDialog {
         gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL;
         add(tunnelSpecificPanel, gbc);
 
-        // --- Кнопка Сохранить ---
-        gbc.gridy = 4; // Следующая строка
+        gbc.gridy = 4;
         gbc.gridx = 0;
-        gbc.gridwidth = 2; // Растягиваем на 2 колонки
-        gbc.anchor = GridBagConstraints.CENTER; // Центрируем кнопку
+        gbc.gridwidth = 2;
+        gbc.anchor = GridBagConstraints.CENTER;
         gbc.fill = GridBagConstraints.NONE;
         gbc.insets = new Insets(20, 10, 10, 10);
         JButton saveButton = new JButton("Сохранить настройки");
@@ -178,8 +173,6 @@ public class RoadSettingsDialog extends JDialog {
         if (cityRoadButton.isSelected()) return RoadType.CITY_ROAD;
         if (highwayButton.isSelected()) return RoadType.HIGHWAY;
         if (tunnelButton.isSelected()) return RoadType.TUNNEL;
-        // Если ничего не выбрано (не должно быть из-за ButtonGroup),
-        // возвращаем текущее из параметров или дефолтное
         return params.getRoadType() != null ? params.getRoadType() : RoadType.CITY_ROAD;
     }
 
@@ -190,7 +183,6 @@ public class RoadSettingsDialog extends JDialog {
         nonTunnelSpecificPanel.setVisible(!isTunnel);
         tunnelSpecificPanel.setVisible(isTunnel);
 
-        // Блокируем/разблокируем элементы в nonTunnelSpecificPanel
         directionLabel.setEnabled(!isTunnel);
         одностороннееButton.setEnabled(!isTunnel);
         двухстороннееButton.setEnabled(!isTunnel);
@@ -198,19 +190,18 @@ public class RoadSettingsDialog extends JDialog {
         lanesPerDirectionSlider.setEnabled(!isTunnel);
 
         if(isTunnel) {
-            // Для тоннеля принудительно 2 направления, 1 полоса в GUI, если они были изменены
             двухстороннееButton.setSelected(true);
             lanesPerDirectionSlider.setValue(1);
         }
         pack();
         Dimension currentSize = getSize();
-        // Гарантируем, что окно не меньше нашего базового минимума И не меньше того, что вычислил pack
         setMinimumSize(new Dimension(Math.max(dialogBaseMinimumSize.width, currentSize.width),
                 Math.max(dialogBaseMinimumSize.height, currentSize.height)));
         if (currentSize.height < getMinimumSize().height || currentSize.width < getMinimumSize().width) {
-            setSize(getMinimumSize()); // Устанавливаем корректный минимальный размер
+            setSize(getMinimumSize());
         }
     }
+
 
     private void loadParameters() {
         RoadType currentType = params.getRoadType();

@@ -20,19 +20,12 @@ public class TrafficFlowGenerator {
     private boolean deterministicSpawnOnScreenTopNext = true;
 
     private static final double MIN_SPAWN_CLEARANCE_M = 7.0;
-    private static final boolean DETAILED_LOGGING = true; // Оставляем включенным для отладки тоннеля
-
 
     public TrafficFlowGenerator(SimulationParameters params, Road road) {
         this.params = params;
         this.road = road;
         this.random = new Random(System.currentTimeMillis());
         resetGenerationTimers();
-        if (DETAILED_LOGGING) {
-            System.out.println("TrafficFlowGenerator создан. Тип дороги: " + road.getType() +
-                    ", Направления (модель): " + params.getNumberOfDirections() +
-                    ", Полос на направление: " + params.getLanesPerDirection());
-        }
     }
 
     public void resetGenerationTimers() {
@@ -40,28 +33,18 @@ public class TrafficFlowGenerator {
         deterministicSpawnOnScreenTopNext = true;
 
         if (params.isRandomTimeFlow()) {
-            // Поток сверху экрана (R->L) использует model_direction = 1
             this.timeToNextCarScreenTop = generateNextRandomInterval();
-            if (DETAILED_LOGGING) System.out.println("  TFG Reset: Random Timer for ScreenTop (model_dir 1) initialized to: " + String.format("%.2f", timeToNextCarScreenTop));
-
-            // Поток снизу экрана (L->R) использует model_direction = 0
-            // Он нужен для двухсторонней дороги (обычной или тоннеля) И для односторонней
             if (params.getNumberOfDirections() == 2 || params.getNumberOfDirections() == 1) {
                 this.timeToNextCarScreenBottom = generateNextRandomInterval();
-                if (DETAILED_LOGGING) System.out.println("  TFG Reset: Random Timer for ScreenBottom (model_dir 0) initialized to: " + String.format("%.2f", timeToNextCarScreenBottom));
-
                 if (params.getNumberOfDirections() == 1 && road.getType() != RoadType.TUNNEL) {
                     this.timeToNextCarScreenTop = Double.POSITIVE_INFINITY;
-                    if (DETAILED_LOGGING) System.out.println("    (Single direction road, ScreenTop timer (model_dir 1) set to INF)");
                 }
             } else {
                 this.timeToNextCarScreenBottom = Double.POSITIVE_INFINITY;
-                if (DETAILED_LOGGING) System.out.println("  TFG Reset: ScreenBottom (model_dir 0) timer set to INF due to unexpected numberOfDirections: " + params.getNumberOfDirections());
             }
         } else {
             this.timeToNextCarScreenTop = Double.POSITIVE_INFINITY;
             this.timeToNextCarScreenBottom = Double.POSITIVE_INFINITY;
-            if (DETAILED_LOGGING) System.out.println("  TFG Reset: Deterministic time flow. Random timers set to INFINITY.");
         }
     }
 
@@ -69,17 +52,11 @@ public class TrafficFlowGenerator {
         Car carForScreenTop = null;
         Car carForScreenBottom = null;
         List<Car> existingCars = road.getCars();
-
         boolean allowSpawnForScreenTop;
         boolean allowSpawnForScreenBottom;
-
         if (road.getType() == RoadType.TUNNEL && tunnelState != null) {
-            allowSpawnForScreenBottom = (tunnelState == TunnelControlState.DIR0_GREEN); // model_dir 0
-            allowSpawnForScreenTop = (tunnelState == TunnelControlState.DIR1_GREEN);    // model_dir 1
-            if (DETAILED_LOGGING && deltaTime > 0.001) { // Логируем, только если время идет
-                System.out.printf("TFG.generateCars: Tunnel State: %s -> allowBottom(m0):%b, allowTop(m1):%b. Timers: Top=%.2f, Bottom=%.2f%n",
-                        tunnelState, allowSpawnForScreenBottom, allowSpawnForScreenTop, timeToNextCarScreenTop, timeToNextCarScreenBottom);
-            }
+            allowSpawnForScreenBottom = (tunnelState == TunnelControlState.DIR0_GREEN);
+            allowSpawnForScreenTop = (tunnelState == TunnelControlState.DIR1_GREEN);
         } else if (road.getNumberOfDirections() == 1) {
             allowSpawnForScreenTop = false;
             allowSpawnForScreenBottom = true;
@@ -103,7 +80,6 @@ public class TrafficFlowGenerator {
                     }
                 }
             }
-
             if (allowSpawnForScreenBottom) {
                 timeToNextCarScreenBottom -= deltaTime;
                 if (timeToNextCarScreenBottom <= 0) {
@@ -121,12 +97,10 @@ public class TrafficFlowGenerator {
         } else {
             timeSinceLastDeterministicCar += deltaTime;
             double requiredInterval = params.getDeterministicIntervalSeconds();
-
             if (requiredInterval > 0 && timeSinceLastDeterministicCar >= requiredInterval) {
                 boolean carCreatedThisTick = false;
                 DriverType driverType = getRandomDriverType();
                 double baseInitialSpeedKmh = params.isRandomSpeedFlow() ? -1 : params.getDeterministicSpeedKmh();
-
                 if (road.getNumberOfDirections() == 2) {
                     if (deterministicSpawnOnScreenTopNext && allowSpawnForScreenTop) {
                         double speedForThisCar = (baseInitialSpeedKmh == -1) ? generateInitialSpeedKmhFromSettings(driverType) : baseInitialSpeedKmh;
@@ -310,18 +284,12 @@ public class TrafficFlowGenerator {
         double initialSpeedKmh = Math.min(initialGeneratedSpeedKmh, personalMaxSpeedKmh);
         initialSpeedKmh = Math.max(roadMinKmh, Math.min(initialSpeedKmh, roadMaxKmh));
 
-        if (DETAILED_LOGGING) {
-            String screenDir = (modelDirection == 1) ? "ScreenTop (R->L, model_dir 1)" : "ScreenBottom (L->R, model_dir 0)";
-            System.out.printf(">>> CREATE CAR for %s: Type: %s, InitLocalLane: %d, InitPos: %.1f, InitialSpeed:%.1f km/h (PersonalMax: %.1f, FlowGenSpeed: %.1f)%n",
-                    screenDir, driverType, targetLocalLaneIndex, initialPosition, initialSpeedKmh, personalMaxSpeedKmh, initialGeneratedSpeedKmh);
-        }
         double initialSpeedMs = initialSpeedKmh / 3.6;
         double personalMaxSpeedMs = personalMaxSpeedKmh / 3.6;
         return new Car(initialPosition, initialSpeedMs, personalMaxSpeedMs, driverType, targetLocalLaneIndex, modelDirection);
     }
 
     public void updateParameters(SimulationParameters newParams) {
-        if (DETAILED_LOGGING) System.out.println("TrafficFlowGenerator.updateParameters -> сброс таймеров генерации.");
         resetGenerationTimers();
     }
 }

@@ -29,7 +29,6 @@ public class MainFrame extends JFrame {
     private JButton modelingSettingsButton;
     private JButton addTrafficLightIconButton;
     private JButton addRoadSignIconButton;
-    // private JButton removeObjectButton; // Убираем, удаление теперь по прямому клику
     private JButton helpButton;
 
     private JToggleButton speed1xButton, speed2xButton, speed3xButton;
@@ -38,7 +37,7 @@ public class MainFrame extends JFrame {
     private JButton pauseButton;
     private JButton stopButton;
 
-    private enum UserInteractionMode { NONE, ADD_TRAFFIC_LIGHT, ADD_ROAD_SIGN } // Убрали REMOVE_OBJECT
+    private enum UserInteractionMode { NONE, ADD_TRAFFIC_LIGHT, ADD_ROAD_SIGN }
     private UserInteractionMode currentUserMode = UserInteractionMode.NONE;
     private String currentPlacementHint = "";
 
@@ -49,7 +48,7 @@ public class MainFrame extends JFrame {
 
 
     public MainFrame() {
-        setTitle("Система моделирования движения транспорта v1.5"); // Обновим версию
+        setTitle("Система моделирования движения транспорта v1.5");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
         setPreferredSize(new Dimension(1000, 700));
@@ -77,21 +76,24 @@ public class MainFrame extends JFrame {
         toolBar.setFloatable(false);
         toolBar.setRollover(true);
 
-        roadSettingsButton = new JButton("Параметры автодороги");
-        modelingSettingsButton = new JButton("Параметры моделирования");
-        helpButton = new JButton("Справка");
+        int commonButtonHeight = 30;
 
-        Dimension iconButtonSize = new Dimension(32, 32); // Чуть побольше для иконок
+        roadSettingsButton = new JButton("Параметры автодороги");
+        roadSettingsButton.setPreferredSize(new Dimension(roadSettingsButton.getPreferredSize().width + 10, commonButtonHeight));
+        modelingSettingsButton = new JButton("Параметры моделирования");
+        modelingSettingsButton.setPreferredSize(new Dimension(modelingSettingsButton.getPreferredSize().width + 10, commonButtonHeight));
+        helpButton = new JButton("Справка");
+        helpButton.setPreferredSize(new Dimension(helpButton.getPreferredSize().width + 10, commonButtonHeight));
+
+        Dimension iconButtonFixedSize = new Dimension(commonButtonHeight + 6, commonButtonHeight);
 
         ImageIcon lightIcon = loadImageIcon("icons/traffic_light_icon.png", "Добавить светофор");
         addTrafficLightIconButton = new JButton(lightIcon);
-        configureIconButton(addTrafficLightIconButton, "Добавить светофор (макс. 2 на не-тоннель)", iconButtonSize, lightIcon == null ? "Св+" : null);
+        configureIconButton(addTrafficLightIconButton, "Добавить светофор (макс. 2 на не-тоннель)", iconButtonFixedSize, lightIcon == null ? "Св+" : null);
 
         ImageIcon signIcon = loadImageIcon("icons/road_sign_icon.png", "Добавить знак");
         addRoadSignIconButton = new JButton(signIcon);
-        configureIconButton(addRoadSignIconButton, "Добавить дорожный знак", iconButtonSize, signIcon == null ? "Зн+" : null);
-
-        // Кнопка для удаления объектов убрана
+        configureIconButton(addRoadSignIconButton, "Добавить дорожный знак", iconButtonFixedSize, signIcon == null ? "Зн+" : null);
 
         roadSettingsButton.addActionListener(e -> openRoadSettingsDialog());
         modelingSettingsButton.addActionListener(e -> openModelingSettingsDialog());
@@ -122,46 +124,45 @@ public class MainFrame extends JFrame {
         toolBar.addSeparator(new Dimension(10,0));
         toolBar.add(addTrafficLightIconButton);
         toolBar.add(addRoadSignIconButton);
-        // toolBar.addSeparator(); // Сепаратор перед удалением не нужен
-        // toolBar.add(removeObjectButton); // Убрали кнопку удаления
         toolBar.add(Box.createHorizontalGlue());
         toolBar.add(helpButton);
         return toolBar;
     }
 
-    private void configureIconButton(JButton button, String tooltip, Dimension size, String fallbackText) {
+    private void configureIconButton(JButton button, String tooltip, Dimension fixedSize, String fallbackText) {
         button.setToolTipText(tooltip);
-        button.setPreferredSize(size);
-        button.setMinimumSize(size);
-        button.setMaximumSize(size);
+        button.setPreferredSize(fixedSize);
+        button.setMinimumSize(fixedSize);
+        button.setMaximumSize(fixedSize);
         button.setFocusPainted(false);
-        button.setMargin(new Insets(2,2,2,2)); // Уменьшаем отступы внутри кнопки
+        button.setMargin(new Insets(1,1,1,1));
         if (button.getIcon() == null && fallbackText != null) {
             button.setText(fallbackText);
+            button.setFont(new Font(button.getFont().getName(), Font.BOLD, 10));
         } else if (button.getIcon() != null) {
             button.setText(null);
         }
     }
 
     private ImageIcon loadImageIcon(String path, String description) {
-        // ... (без изменений) ...
         URL imgURL = getClass().getClassLoader().getResource(path);
         if (imgURL != null) {
             ImageIcon icon = new ImageIcon(imgURL, description);
-            if (icon.getIconWidth() > 28 || icon.getIconHeight() > 28) { // Макс. размер иконки для кнопки 32x32 с отступами
+            int iconSize = 28; // Целевой размер иконки
+            // Проверяем, нужно ли масштабирование
+            if (icon.getIconWidth() != iconSize || icon.getIconHeight() != iconSize) {
                 Image img = icon.getImage();
-                Image scaledImg = img.getScaledInstance(28, 28, Image.SCALE_SMOOTH);
+                Image scaledImg = img.getScaledInstance(iconSize, iconSize, Image.SCALE_SMOOTH);
                 return new ImageIcon(scaledImg, description);
             }
             return icon;
         } else {
-            System.err.println("Не удалось загрузить иконку: " + path + " (для " + description + ")");
+            // System.err.println("Не удалось загрузить иконку: " + path + " (для " + description + ")");
             return null;
         }
     }
 
     private JPanel createBottomControlPanel() {
-        // ... (код без изменений, кнопка Стоп будет доработана в SimulationEngine) ...
         JPanel panel = new JPanel(new BorderLayout(10, 5));
         panel.setBorder(BorderFactory.createEmptyBorder(5,10,5,10));
         JPanel speedPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
@@ -191,10 +192,7 @@ public class MainFrame extends JFrame {
         runGenerationButton.addActionListener(e -> {
             currentUserMode = UserInteractionMode.NONE;
             simulationPanel.setPlacementMode(false, null);
-            if (simulationEngine.isRunning() && !simulationEngine.isPaused()) {
-            } else {
-                simulationEngine.startSimulation();
-            }
+            simulationEngine.startSimulation();
             setBottomControlsEnabledState(false);
             runGenerationButton.setText("Генерация...");
         });
@@ -225,7 +223,6 @@ public class MainFrame extends JFrame {
     }
 
     private void setBottomControlsEnabledState(boolean simNotRunningOrStopped) {
-        // ... (без изменений) ...
         runGenerationButton.setEnabled(simNotRunningOrStopped);
         pauseButton.setEnabled(!simNotRunningOrStopped);
         if (simNotRunningOrStopped) {
@@ -235,7 +232,6 @@ public class MainFrame extends JFrame {
     }
 
     private void handleDialogOpening(){
-        // ... (без изменений) ...
         if (simulationEngine.isRunning() && !simulationEngine.isPaused()) {
             simulationEngine.pauseSimulation();
             pauseButton.setText("Продолжить");
@@ -245,7 +241,6 @@ public class MainFrame extends JFrame {
     }
 
     private void handleDialogClosing(boolean settingsWereSaved){
-        // ... (без изменений) ...
         if (settingsWereSaved) {
             simulationEngine.updateParameters(simulationParameters);
             setBottomControlsEnabledState(true);
@@ -259,11 +254,10 @@ public class MainFrame extends JFrame {
             }
         }
     }
-    private void openRoadSettingsDialog() { /* ... (без изменений) ... */ handleDialogOpening(); RoadSettingsDialog roadDlg = new RoadSettingsDialog(this, simulationParameters); boolean settingsWereSaved = roadDlg.showDialog(); handleDialogClosing(settingsWereSaved); }
-    private void openModelingSettingsDialog() {  /* ... (без изменений) ... */ handleDialogOpening(); ModelingSettingsDialog modelingDlg = new ModelingSettingsDialog(this, simulationParameters); boolean settingsWereSaved = modelingDlg.showDialog(); handleDialogClosing(settingsWereSaved); }
+    private void openRoadSettingsDialog() { handleDialogOpening(); RoadSettingsDialog roadDlg = new RoadSettingsDialog(this, simulationParameters); boolean settingsWereSaved = roadDlg.showDialog(); handleDialogClosing(settingsWereSaved); }
+    private void openModelingSettingsDialog() {  handleDialogOpening(); ModelingSettingsDialog modelingDlg = new ModelingSettingsDialog(this, simulationParameters); boolean settingsWereSaved = modelingDlg.showDialog(); handleDialogClosing(settingsWereSaved); }
 
     private boolean canInteractWithRoadObjects(){
-        // ... (без изменений) ...
         if (simulationEngine.getRoad() == null) {
             JOptionPane.showMessageDialog(this, "Сначала настройте параметры дороги.", "Ошибка", JOptionPane.ERROR_MESSAGE);
             return false;
@@ -283,7 +277,7 @@ public class MainFrame extends JFrame {
         return true;
     }
 
-    private void showAboutDialog() { /* ... (без изменений) ... */ AboutDialog aboutDialog = new AboutDialog(this); aboutDialog.setVisible(true); }
+    private void showAboutDialog() { AboutDialog aboutDialog = new AboutDialog(this); aboutDialog.setVisible(true); }
 
     private void addSimulationPanelMouseListener() {
         simulationPanel.addMouseListener(new MouseAdapter() {
@@ -330,7 +324,7 @@ public class MainFrame extends JFrame {
                         if (e.getY() < roadCenterY) determinedModelDirection = 1;
                         else determinedModelDirection = 0;
                     } else if (currentRoad.getNumberOfDirections() == 1) {
-                        determinedModelDirection = 0;
+                        determinedModelDirection = currentRoad.getFirstDirection();
                     } else if (currentRoadType == RoadType.TUNNEL) {
                         determinedModelDirection = -1;
                     }
@@ -342,8 +336,8 @@ public class MainFrame extends JFrame {
                     }
                     currentUserMode = UserInteractionMode.NONE;
                     simulationPanel.setPlacementMode(false, null);
-                } else if (currentUserMode == UserInteractionMode.NONE) { // Нет активного режима добавления -> проверяем удаление
-                    if (!canInteractWithRoadObjects()) return; // Остановит симуляцию, если нужно
+                } else if (currentUserMode == UserInteractionMode.NONE) {
+                    if (!canInteractWithRoadObjects()) return;
 
                     TrafficLight lightToRemove = findTrafficLightAtScreenPosition(e.getX(), e.getY(), roadVisualTopY, roadRenderHeight);
                     if (lightToRemove != null) {
@@ -374,7 +368,6 @@ public class MainFrame extends JFrame {
     }
 
     private TrafficLight findTrafficLightAtScreenPosition(int screenX, int screenY, int roadTopY, int roadHeight) {
-        // ... (код без изменений, использует SimulationPanel.КОНСТАНТЫ) ...
         if (simulationEngine.getRoad() == null) return null;
         Road road = simulationEngine.getRoad();
         int panelWidth = simulationPanel.getWidth();
@@ -404,7 +397,6 @@ public class MainFrame extends JFrame {
     }
 
     private RoadSign findRoadSignAtScreenPosition(int screenX, int screenY, int roadTopY, int roadHeight) {
-        // ... (код без изменений, использует SimulationPanel.КОНСТАНТЫ) ...
         if (simulationEngine.getRoad() == null) return null;
         Road road = simulationEngine.getRoad();
         int panelWidth = simulationPanel.getWidth();
@@ -442,7 +434,6 @@ public class MainFrame extends JFrame {
     }
 
     private boolean isPlacementPositionValid(double newPosition) {
-        // ... (без изменений) ...
         if (simulationEngine.getRoad() == null) return false;
         if (newPosition < MIN_EDGE_SPACING_METERS || newPosition > (simulationEngine.getRoad().getLength() - MIN_EDGE_SPACING_METERS)) {
             return false;
@@ -463,7 +454,6 @@ public class MainFrame extends JFrame {
     }
 
     private void openTrafficLightSettingsDialog(double position, int modelTargetDirection) {
-        // ... (без изменений) ...
         if (simulationEngine.getRoad() == null ) {
             JOptionPane.showMessageDialog(this, "Дорога не инициализирована.", "Ошибка", JOptionPane.ERROR_MESSAGE);
             return;
@@ -505,7 +495,6 @@ public class MainFrame extends JFrame {
     }
 
     private void openRoadSignSettingsDialog(double position, int modelTargetDirection) {
-        // ... (без изменений) ...
         RoadType currentRoadType = simulationParameters.getRoadType();
         if (currentRoadType == null) currentRoadType = RoadType.CITY_ROAD;
         List<Integer> availableSpeeds = new ArrayList<>();
